@@ -1,0 +1,14 @@
+# ─── Node.js / React ──────────────────────────
+node_modules/
+client/dist/
+server/data/
+*.log
+.env
+.DS_Store
+
+# خروجی‌های دسکتاپ و اندروید
+desktop/release/
+desktop/server-app/
+desktop/client/
+android-app/android/
+android-app/node_modules/

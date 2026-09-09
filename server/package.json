@@ -1,0 +1,19 @@
+{
+  "name": "listia-server",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch --no-warnings index.js",
+    "start": "node --no-warnings index.js",
+    "seed": "node --no-warnings seed.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.16",
+    "xlsx": "^0.18.5"
+  }
+}

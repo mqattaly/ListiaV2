@@ -1,0 +1,54 @@
+{
+  "name": "listia-desktop",
+  "version": "2.1.0",
+  "private": true,
+  "description": "نسخه‌ی دسکتاپ لیستیا — سرور و دیتابیس داخلی، بدون نیاز به اینترنت",
+  "main": "main.js",
+  "scripts": {
+    "prepare:server": "node scripts/prepare.js",
+    "start": "npm run prepare:server && electron .",
+    "dist:win": "npm run prepare:server && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.16",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ir.listia.desktop",
+    "productName": "لیستیا",
+    "directories": {
+      "output": "release"
+    },
+    "asar": false,
+    "files": [
+      "main.js",
+      "server-app/**/*",
+      "client/**/*",
+      "build/icon.ico"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "لیستیا",
+      "artifactName": "Listia-Setup-${version}.${ext}"
+    }
+  }
+}

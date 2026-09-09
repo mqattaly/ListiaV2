@@ -1,0 +1,16 @@
+{
+  "name": "listia-android",
+  "version": "2.1.0",
+  "private": true,
+  "description": "اپ اندروید لیستیا — پوسته‌ی Capacitor متصل به سرور چابکان",
+  "scripts": {
+    "add": "cap add android",
+    "sync": "cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/cli": "^7.0.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "appId": "ir.listia.app",
+  "appName": "لیستیا",
+  "webDir": "www",
+  "server": {
+    "url": "https://YOUR-APP-URL.chabokan.ir",
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}

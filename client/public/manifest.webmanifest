@@ -1,0 +1,33 @@
+{
+  "name": "لیستیا — مدیریت هوشمند خرید",
+  "short_name": "لیستیا",
+  "description": "مدیریت لیست خرید، تأمین‌کننده‌ها، بایگانی و برآورد قیمت",
+  "dir": "rtl",
+  "lang": "fa",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#05070f",
+  "theme_color": "#070b18",
+  "icons": [
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

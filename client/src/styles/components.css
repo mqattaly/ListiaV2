@@ -1,0 +1,564 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   کامپوننت‌ها: دکمه، فرم، مودال، توست، بج، جدول، اسکلتون
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── دکمه‌ها ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s,
+    box-shadow 0.2s, opacity 0.2s;
+  user-select: none;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn:hover {
+  border-color: var(--border-2);
+  background: var(--surface-3);
+  transform: translateY(-1px);
+}
+.btn:active {
+  transform: translateY(0) scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn svg { flex-shrink: 0; }
+
+.btn-primary {
+  background: var(--accent-grad);
+  border: none;
+  color: #fff;
+  box-shadow: 0 6px 22px rgba(99, 102, 241, 0.35);
+}
+.btn-primary:hover {
+  background: var(--accent-grad);
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  border-color: rgba(251, 113, 133, 0.25);
+  color: var(--danger);
+}
+.btn-danger:hover {
+  background: rgba(251, 113, 133, 0.22);
+  border-color: rgba(251, 113, 133, 0.45);
+}
+
+.btn-success {
+  background: var(--success-soft);
+  border-color: rgba(52, 211, 153, 0.3);
+  color: var(--success);
+}
+.btn-success:hover {
+  background: rgba(52, 211, 153, 0.22);
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover {
+  background: var(--surface-2);
+}
+
+.btn-sm {
+  padding: 7px 13px;
+  font-size: 13px;
+  border-radius: 11px;
+  gap: 6px;
+}
+.btn-lg {
+  padding: 14px 26px;
+  font-size: 15px;
+  border-radius: 16px;
+}
+.btn-icon {
+  padding: 9px;
+  border-radius: 12px;
+}
+
+/* ─── فرم ─────────────────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.field > label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.input,
+.select,
+textarea.input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 14.5px;
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.input:focus,
+.select:focus {
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  background: var(--surface-2);
+}
+.input::placeholder {
+  color: var(--text-3);
+}
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7799' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m6 9 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  background-size: 16px;
+  padding-left: 38px;
+  cursor: pointer;
+}
+textarea.input {
+  resize: vertical;
+  min-height: 84px;
+}
+.input-error {
+  border-color: var(--danger) !important;
+}
+.error-text {
+  color: var(--danger);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hint-text {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/* ─── بج و چیپ ────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.badge-accent {
+  background: var(--accent-soft);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+}
+.badge-success {
+  background: var(--success-soft);
+  border-color: rgba(52, 211, 153, 0.35);
+  color: var(--success);
+}
+.badge-danger {
+  background: var(--danger-soft);
+  border-color: rgba(251, 113, 133, 0.35);
+  color: var(--danger);
+}
+.badge-warning {
+  background: var(--warning-soft);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: var(--warning);
+}
+.badge-cyan {
+  background: var(--cyan-soft);
+  border-color: rgba(34, 211, 238, 0.35);
+  color: #67e8f9;
+}
+
+/* ─── مودال انیمیشنی ──────────────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(4, 7, 16, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+.modal-panel {
+  width: 100%;
+  max-width: 540px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
+    var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2), 0 0 80px rgba(99, 102, 241, 0.08);
+  overflow: hidden;
+}
+[data-theme="light"] .modal-panel {
+  background: linear-gradient(160deg, #ffffff, #f4f6ff);
+}
+.modal-panel.modal-lg {
+  max-width: 760px;
+}
+.modal-panel.modal-sm {
+  max-width: 420px;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 14px;
+  flex-shrink: 0;
+}
+.modal-head .modal-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: #a5b4fc;
+  flex-shrink: 0;
+}
+.modal-head h3 {
+  font-size: 17px;
+  flex: 1;
+}
+.modal-head .modal-sub {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.modal-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.modal-close:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: rgba(251, 113, 133, 0.3);
+  transform: rotate(90deg);
+}
+.modal-body {
+  padding: 10px 24px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-foot {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+  padding: 0 24px 22px;
+  flex-wrap: wrap;
+}
+
+/* ─── توست ─────────────────────────────────────────────────────────────────── */
+.toast-stack {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
+    var(--bg-1);
+  border: 1px solid var(--border-2);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(var(--blur));
+  pointer-events: auto;
+}
+[data-theme="light"] .toast {
+  background: #ffffff;
+}
+.toast .toast-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.toast.success .toast-icon {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.toast.error .toast-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.toast.info .toast-icon {
+  background: var(--accent-soft);
+  color: #a5b4fc;
+}
+.toast .toast-msg {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+/* ─── جدول ────────────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-l);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+table.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  min-width: 560px;
+}
+table.tbl thead th {
+  text-align: right;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--text-3);
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+table.tbl tbody td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+table.tbl tbody tr:last-child td {
+  border-bottom: none;
+}
+table.tbl tbody tr {
+  transition: background 0.15s;
+}
+table.tbl tbody tr:hover {
+  background: var(--surface-2);
+}
+
+/* ─── اسکلتون ─────────────────────────────────────────────────────────────── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: 12px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ─── حالت خالی ───────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 46px 20px;
+  color: var(--text-3);
+}
+.empty-state .empty-icon {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto 16px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: #818cf8;
+}
+.empty-state h3 {
+  color: var(--text-1);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.empty-state p {
+  font-size: 13px;
+  line-height: 1.9;
+  max-width: 340px;
+  margin: 0 auto;
+}
+
+/* ─── نوار پیشرفت ─────────────────────────────────────────────────────────── */
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  position: relative;
+}
+.progress > div {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-grad);
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.5);
+}
+.progress.danger > div {
+  background: linear-gradient(135deg, #fb7185, #f97316);
+  box-shadow: 0 0 14px rgba(251, 113, 133, 0.5);
+}
+.progress.success > div {
+  background: linear-gradient(135deg, #34d399, #22d3ee);
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.4);
+}
+
+/* ─── تب‌های سگمنتی ───────────────────────────────────────────────────────── */
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 15px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+.segmented button.active {
+  color: var(--text-1);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-1);
+}
+
+/* ─── تولتیپ ساده ─────────────────────────────────────────────────────────── */
+.tip {
+  position: relative;
+}
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 50%;
+  transform: translateX(50%) scale(0.9);
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  color: var(--text-1);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.15s;
+  z-index: 60;
+}
+.tip:hover::after {
+  opacity: 1;
+  transform: translateX(50%) scale(1);
+}
+
+/* ─── آواتار ──────────────────────────────────────────────────────────────── */
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+  background: var(--accent-grad);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  flex-shrink: 0;
+}
+
+/* ─── اسوییچ ──────────────────────────────────────────────────────────────── */
+.switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  cursor: pointer;
+  transition: background 0.25s;
+  flex-shrink: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.switch.on {
+  background: var(--accent-grad);
+  border-color: transparent;
+}
+.switch.on::after {
+  background: #fff;
+  transform: translateX(-20px);
+}

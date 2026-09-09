@@ -1,0 +1,105 @@
+// روتینگ اصلی + محافظت از مسیرها
+import React from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
+import { useApp } from "./context/AppContext.jsx";
+import Layout from "./components/Layout.jsx";
+import AuthPage from "./pages/AuthPage.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Purchases from "./pages/Purchases.jsx";
+import Suppliers from "./pages/Suppliers.jsx";
+import SupplierDetail from "./pages/SupplierDetail.jsx";
+import SearchPage from "./pages/SearchPage.jsx";
+import Estimate from "./pages/Estimate.jsx";
+import ImportPage from "./pages/ImportPage.jsx";
+import Account from "./pages/Account.jsx";
+import Admin from "./pages/Admin.jsx";
+import { ShoppingBasket } from "lucide-react";
+
+function BootSplash() {
+  return (
+    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+      <div className="aurora-bg">
+        <div className="aurora-blob b1" />
+        <div className="aurora-blob b2" />
+      </div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        style={{ textAlign: "center" }}
+      >
+        <motion.span
+          className="brand-logo"
+          style={{ width: 74, height: 74, borderRadius: 24, margin: "0 auto 18px", display: "grid", placeItems: "center", background: "var(--accent-grad)", color: "#fff", boxShadow: "0 14px 44px rgba(99,102,241,.45)" }}
+          animate={{ y: [0, -8, 0] }}
+          transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
+        >
+          <ShoppingBasket size={34} strokeWidth={2} />
+        </motion.span>
+        <div style={{ fontWeight: 800, fontSize: 20 }}>لیستیا</div>
+        <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>در حال آماده‌سازی…</div>
+      </motion.div>
+    </div>
+  );
+}
+
+function Protected({ children }) {
+  const { user, booting } = useApp();
+  const location = useLocation();
+  if (booting) return <BootSplash />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  return children;
+}
+
+function GuestOnly({ children }) {
+  const { user, booting } = useApp();
+  if (booting) return <BootSplash />;
+  if (user) return <Navigate to="/" replace />;
+  return children;
+}
+
+function NotFound() {
+  return (
+    <div className="card" style={{ textAlign: "center", padding: 60 }}>
+      <h2 style={{ fontSize: 44 }} className="text-gradient mono">404</h2>
+      <p className="muted" style={{ margin: "10px 0 20px" }}>این صفحه در لیستیا وجود ندارد.</p>
+    </div>
+  );
+}
+
+export default function App() {
+  const { user } = useApp();
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          <GuestOnly>
+            <AuthPage />
+          </GuestOnly>
+        }
+      />
+      <Route
+        element={
+          <Protected>
+            <Layout />
+          </Protected>
+        }
+      >
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/purchases" element={<Purchases />} />
+        <Route path="/suppliers" element={<Suppliers />} />
+        <Route path="/supplier/:id" element={<SupplierDetail />} />
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/estimate" element={<Estimate />} />
+        <Route path="/import" element={<ImportPage />} />
+        <Route path="/account" element={<Account />} />
+        <Route
+          path="/admin"
+          element={user?.is_admin ? <Admin /> : <Navigate to="/" replace />}
+        />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
+  );
+}

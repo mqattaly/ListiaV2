@@ -1,0 +1,26 @@
+{
+  "name": "listia",
+  "version": "2.0.0",
+  "private": true,
+  "description": "لیستیا — مدیریت هوشمند خرید و تأمین‌کننده‌ها (React + Node.js)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mqattaly/ListiaV2.git"
+  },
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev -w server\" \"npm:dev -w client\"",
+    "seed": "npm run seed -w server",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
