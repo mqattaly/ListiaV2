@@ -5,6 +5,7 @@ import { PackagePlus, Pencil, AlertTriangle } from "lucide-react";
 import Modal from "./Modal.jsx";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
+import { BtnSpinner } from "./bits.jsx";
 
 const UNITS = ["عدد", "کارتن", "بسته", "گونی", "کیلو"];
 
@@ -202,7 +203,7 @@ export default function ProductModal({
 
         <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
           <button type="submit" className="btn btn-primary btn-lg" disabled={saving} style={{ flex: 1 }}>
-            {saving ? "در حال ذخیره…" : product ? "ذخیره‌ی تغییرات" : "ثبت خرید"}
+            {saving ? <><BtnSpinner /> در حال ذخیره…</> : product ? "ذخیره‌ی تغییرات" : "ثبت خرید"}
           </button>
           <button type="button" className="btn btn-lg" onClick={onClose}>
             انصراف

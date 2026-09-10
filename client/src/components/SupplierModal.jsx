@@ -4,6 +4,7 @@ import { Store, Pencil } from "lucide-react";
 import Modal from "./Modal.jsx";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
+import { BtnSpinner } from "./bits.jsx";
 
 export default function SupplierModal({ open, onClose, supplier = null, onSaved }) {
   const { toast } = useApp();
@@ -57,7 +58,7 @@ export default function SupplierModal({ open, onClose, supplier = null, onSaved 
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button type="submit" className="btn btn-primary btn-lg" disabled={saving} style={{ flex: 1 }}>
-            {saving ? "در حال ذخیره…" : supplier ? "ذخیره" : "افزودن"}
+            {saving ? <><BtnSpinner /> در حال ذخیره…</> : supplier ? "ذخیره" : "افزودن"}
           </button>
           <button type="button" className="btn btn-lg" onClick={onClose}>
             انصراف

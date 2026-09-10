@@ -17,6 +17,8 @@ import {
 import { api, getSessionToken, saveSessionToken } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 import { APP_VERSION } from "../format.js";
+import FxBackdrop from "../components/FxBackdrop.jsx";
+import { BtnSpinner } from "../components/bits.jsx";
 
 const MODES = { login: 0, signup: 1, verify: 2 };
 
@@ -29,6 +31,16 @@ export default function AuthPage() {
     // نباید در صفحه‌ی ورود بماند.
     if (getSessionToken()) refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    // بعد از خروج موفق، پیام خداحافظی را همین‌جا نشان بده
+    try {
+      if (sessionStorage.getItem("listia-just-logged-out")) {
+        sessionStorage.removeItem("listia-just-logged-out");
+        setNotice("با موفقیت خارج شدید. به سلامت 👋");
+      }
+    } catch { /* ignore */ }
+  }, []);
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({
     username: "",
@@ -107,6 +119,7 @@ export default function AuthPage() {
         <div className="aurora-blob b1" />
         <div className="aurora-blob b2" />
         <div className="aurora-blob b3" />
+        <FxBackdrop density={0.8} />
       </div>
       <div className="auth-wrap">
         <AuthHero />
@@ -243,7 +256,7 @@ export default function AuthPage() {
 
                     <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>
                       {busy
-                        ? "لطفاً صبر کنید…"
+                        ? <><BtnSpinner /> لطفاً صبر کنید…</>
                         : mode === "login"
                           ? <>
                               <LogIn size={18} /> ورود
@@ -318,6 +331,20 @@ function AuthHero() {
           لیستیا لیست خرید، تأمین‌کننده‌ها، بایگانی سفارش‌ها و برآورد هزینه‌ی شما را یک‌جا
           جمع می‌کند — با اشتراک‌گذاری با همکاران و دسترسی از هرجا.
         </p>
+        <motion.div
+          className="hero-art"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
+          <motion.img
+            src="/img/auth-hero.png"
+            alt="لیستیا — مدیریت هوشمند خرید"
+            animate={{ y: [0, -10, 0] }}
+            transition={{ repeat: Infinity, duration: 5.5, ease: "easeInOut" }}
+            loading="eager"
+          />
+        </motion.div>
         <div className="hero-badges">
           {features.map((f, i) => (
             <motion.span
@@ -446,7 +473,7 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
           ))}
         </div>
         <button type="submit" className="btn btn-primary btn-lg full" disabled={busy} style={{ marginTop: 16 }}>
-          {busy ? "در حال بررسی…" : <><MailCheck size={18} /> تأیید و ورود</>}
+          {busy ? <><BtnSpinner /> در حال بررسی…</> : <><MailCheck size={18} /> تأیید و ورود</>}
         </button>
       </form>
       <div className="auth-switch">

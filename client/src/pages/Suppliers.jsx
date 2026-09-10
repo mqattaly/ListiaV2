@@ -12,6 +12,13 @@ export default function Suppliers() {
   const { toast, confirm, limits, refresh, user } = useApp();
   const [data, setData] = useState(null);
   const [modal, setModal] = useState({ open: false, supplier: null });
+  const [highlight, setHighlight] = useState(null);
+
+  const flashCard = (id) => {
+    if (!id) return;
+    setHighlight(id);
+    setTimeout(() => setHighlight((h) => (h === id ? null : h)), 2600);
+  };
 
   const load = useCallback(async () => {
     const d = await api.get("/api/suppliers").catch(() => null);
@@ -67,7 +74,7 @@ export default function Suppliers() {
       ) : suppliers.length === 0 ? (
         <div className="card">
           <EmptyState
-            icon={<Store size={30} />}
+            image="/img/empty-store.png"
             title="هنوز تأمین‌کننده‌ای نساخته‌اید"
             text="هر تأمین‌کننده یک لیست خریدِ جداگانه است — مثلاً «هایپراستار» یا «مواد غذایی پارس»."
             action={
@@ -81,7 +88,7 @@ export default function Suppliers() {
         <StaggerList className="supplier-grid">
           {suppliers.map((s) => (
             <StaggerItem key={s.id}>
-              <div className="card card-hover supplier-card">
+              <div className={`card card-hover supplier-card ${highlight === s.id ? "highlight" : ""}`}>
                 <span className="sc-shine" />
                 <Link to={`/supplier/${s.id}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <div className="sc-top">
@@ -132,9 +139,10 @@ export default function Suppliers() {
         open={modal.open}
         supplier={modal.supplier}
         onClose={() => setModal({ open: false, supplier: null })}
-        onSaved={() => {
+        onSaved={(saved) => {
           load();
           refresh();
+          flashCard(saved?.id);
         }}
       />
     </div>

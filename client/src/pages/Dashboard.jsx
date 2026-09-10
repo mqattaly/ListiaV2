@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
-import { AnimatedNumber, StaggerList, StaggerItem, SkeletonRows, EmptyState } from "../components/bits.jsx";
+import { AnimatedNumber, StaggerList, StaggerItem, SkeletonRows, EmptyState, BtnSpinner } from "../components/bits.jsx";
 import ProductModal from "../components/ProductModal.jsx";
 import { greeting } from "../format.js";
 
@@ -196,7 +196,7 @@ export default function Dashboard() {
             <div className="field">
               <label>&nbsp;</label>
               <button className="btn btn-primary" type="submit" disabled={savingQuick}>
-                {savingQuick ? "…" : "ثبت"}
+                {savingQuick ? <BtnSpinner /> : "ثبت"}
               </button>
             </div>
           </form>
@@ -225,7 +225,7 @@ export default function Dashboard() {
       ) : suppliers.length === 0 ? (
         <div className="card">
           <EmptyState
-            icon={<Store size={30} />}
+            image="/img/empty-store.png"
             title="هنوز تأمین‌کننده‌ای ندارید"
             text="تأمین‌کننده‌ها مثل پوشه‌های لیست خرید شما هستند — برای هر مغازه یا فروشنده یک‌بسازید."
             action={
@@ -279,6 +279,7 @@ export default function Dashboard() {
           <SkeletonRows rows={3} height={54} />
         ) : (data?.recent ?? []).length === 0 ? (
           <EmptyState
+            image="/img/empty-purchases.png"
             title="لیست خرید خالی است"
             text="با فرم «ثبت سریع» بالا اولین قلم خریدتان را اضافه کنید."
           />

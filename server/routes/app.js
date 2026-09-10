@@ -12,6 +12,7 @@ import {
   parseAmount,
   storeAmount,
   estimateAmountForStorage,
+  detectPriceUnit,
   safeHttpUrl,
   shamsiLabel,
   todayISO,
@@ -487,9 +488,15 @@ router.post("/estimate/item/:id", (req, res) => {
   const product = ownedProduct(req.user.id, req.params.id);
   if (!product) return jsonError(res, "محصول پیدا نشد.", 404);
   const body = req.body ?? {};
+  let priceUnitNote = "";
+  let priceCleared = false;
   try {
     if ("unit_price" in body) {
       const value = estimateAmountForStorage(body.unit_price, "قیمت");
+      if (value && detectPriceUnit(body.unit_price) === "rial") {
+        priceUnitNote = "مبلغ ریالی به تومان تبدیل و ذخیره شد.";
+      }
+      priceCleared = value === null;
       run("UPDATE products SET unit_price = ? WHERE id = ?", value, product.id);
       product.unit_price = value;
     }
@@ -505,20 +512,32 @@ router.post("/estimate/item/:id", (req, res) => {
     const url = (safeHttpUrl(body.price_url) || "").slice(0, 500);
     run("UPDATE products SET price_url = ? WHERE id = ?", url, product.id);
     product.price_url = url;
+  } else if (priceCleared && product.price_url) {
+    // قیمت پاک شد ولی لینک نه ← لینکِ بی‌قیمت بی‌معنی است، خودش پاک می‌شود
+    run("UPDATE products SET price_url = ? WHERE id = ?", "", product.id);
+    product.price_url = "";
   }
   const snapshot = estimateSnapshot(req.user.id);
   snapshot.product = productPayload(product, null, req.user);
+  if (priceUnitNote) snapshot.price_unit_note = priceUnitNote;
   res.json(snapshot);
 });
 
 router.post("/estimate/budget", (req, res) => {
+  let note = "";
   try {
-    const value = estimateAmountForStorage((req.body ?? {}).budget, "سقف بودجه");
+    const rawBudget = (req.body ?? {}).budget;
+    const value = estimateAmountForStorage(rawBudget, "سقف بودجه");
+    if (value && detectPriceUnit(rawBudget) === "rial") {
+      note = "بودجه‌ی ریالی به تومان تبدیل و ذخیره شد.";
+    }
     run("UPDATE users SET estimate_budget = ? WHERE id = ?", value, req.user.id);
   } catch (err) {
     return jsonError(res, err.message);
   }
-  res.json(estimateSnapshot(req.user.id));
+  const snap = estimateSnapshot(req.user.id);
+  if (note) snap.price_unit_note = note;
+  res.json(snap);
 });
 
 router.post("/estimate/next/:id", (req, res) => {

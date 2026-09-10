@@ -49,6 +49,33 @@
   box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5);
   transform: translateY(-2px);
 }
+/* برقِ ردشونده روی دکمه‌ی اصلی — حس ویدیویی */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  width: 44px;
+  right: -70px;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(18deg);
+  pointer-events: none;
+}
+.btn-primary:hover::after {
+  animation: btn-shine 0.9s ease;
+}
+@keyframes btn-shine {
+  from {
+    right: -70px;
+  }
+  to {
+    right: calc(100% + 30px);
+  }
+}
 
 .btn-danger {
   background: var(--danger-soft);
@@ -137,6 +164,26 @@ textarea.input {
   padding-left: 38px;
   cursor: pointer;
 }
+/* پاپ‌آپ نیتیو select در تم تیره: زمینه‌ی تیره + فونت روشن */
+.select,
+select {
+  color-scheme: dark;
+}
+[data-theme="light"] .select,
+[data-theme="light"] select {
+  color-scheme: light;
+}
+.select option,
+select option {
+  background-color: var(--bg-1);
+  color: var(--text-1);
+  font-family: var(--font);
+}
+.select option:checked,
+select option:checked {
+  background-color: var(--accent-1);
+  color: #fff;
+}
 textarea.input {
   resize: vertical;
   min-height: 84px;
@@ -217,11 +264,13 @@ textarea.input {
   max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
-    var(--bg-1);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0.05)),
+    color-mix(in srgb, var(--bg-1) 86%, transparent);
+  backdrop-filter: blur(var(--blur)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.5);
   border: 1px solid var(--border-2);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-2), 0 0 80px rgba(99, 102, 241, 0.08);
+  box-shadow: var(--shadow-2), 0 0 80px rgba(99, 102, 241, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 [data-theme="light"] .modal-panel {
@@ -312,11 +361,12 @@ textarea.input {
   gap: 12px;
   padding: 13px 16px;
   border-radius: 16px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
-    var(--bg-1);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.06)),
+    color-mix(in srgb, var(--bg-1) 82%, transparent);
   border: 1px solid var(--border-2);
-  box-shadow: var(--shadow-2);
-  backdrop-filter: blur(var(--blur));
+  box-shadow: var(--shadow-2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(var(--blur)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.5);
   pointer-events: auto;
 }
 [data-theme="light"] .toast {
@@ -424,6 +474,30 @@ table.tbl tbody tr:hover {
   background: var(--accent-soft);
   color: #818cf8;
 }
+/* تصویر حالت خالی — دایره‌ی شیشه‌ای با هاله‌ی نئونی */
+.empty-state .empty-img {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-2);
+  background:
+    radial-gradient(70% 70% at 50% 30%, rgba(99, 102, 241, 0.22), transparent 70%),
+    var(--surface-2);
+  box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.07), 0 0 44px rgba(99, 102, 241, 0.22);
+  overflow: hidden;
+}
+.empty-state .empty-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.empty-state .empty-img.loaded img {
+  opacity: 1;
+}
 .empty-state h3 {
   color: var(--text-1);
   font-size: 16px;
@@ -450,6 +524,23 @@ table.tbl tbody tr:hover {
   border-radius: 999px;
   background: var(--accent-grad);
   box-shadow: 0 0 14px rgba(99, 102, 241, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+/* موجِ روشنِ متحرک روی نوار پیشرفت */
+.progress > div::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 20%, rgba(255, 255, 255, 0.45) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: progress-sweep 2.4s ease-in-out infinite;
+}
+@keyframes progress-sweep {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
 }
 .progress.danger > div {
   background: linear-gradient(135deg, #fb7185, #f97316);
@@ -529,6 +620,48 @@ table.tbl tbody tr:hover {
   background: var(--accent-grad);
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
   flex-shrink: 0;
+}
+
+/* ─── چک‌باکس بایگانی ──────────────────────────────────────────────────────── */
+.archive-check {
+  width: 27px;
+  height: 27px;
+  border-radius: 10px;
+  border: 2px solid var(--border-2);
+  background: var(--surface-2);
+  color: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: border-color 0.2s, background 0.25s, box-shadow 0.25s, color 0.2s;
+}
+.archive-check:hover {
+  border-color: var(--success);
+  box-shadow: 0 0 0 4px var(--success-soft);
+}
+.archive-check.on {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(52, 211, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.archive-check.busy {
+  opacity: 0.7;
+  cursor: wait;
+  color: var(--text-2);
+}
+.archive-check.on.busy {
+  color: #fff;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── اسوییچ ──────────────────────────────────────────────────────────────── */

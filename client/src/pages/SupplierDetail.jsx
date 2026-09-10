@@ -7,7 +7,6 @@ import {
   Pencil,
   Trash2,
   Archive,
-  ArchiveRestore,
   ShoppingCart,
   CalendarDays,
   PackageSearch,
@@ -15,12 +14,13 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
-import { EmptyState, SkeletonRows, StaggerItem, StaggerList } from "../components/bits.jsx";
+import { ArchiveCheck, EmptyState, SkeletonRows, StaggerItem, StaggerList } from "../components/bits.jsx";
 import ProductModal from "../components/ProductModal.jsx";
 
 export default function SupplierDetail() {
   const { id } = useParams();
-  const { toast, confirm, refresh, user } = useApp();
+  const { toast, confirm, refresh, user, setActiveCount } = useApp();
+  const [pending, setPending] = useState(() => new Set());
   const [data, setData] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [modal, setModal] = useState({ open: false, product: null });
@@ -61,32 +61,60 @@ export default function SupplierDetail() {
     );
   }
 
-  const archive = async (p) => {
-    const ok = await confirm({
-      title: "انتقال به بایگانی",
-      message: `«${p.product_name}» به بایگانیِ امروز (${data?.today_label}) منتقل شود؟`,
-      confirmLabel: "بله، بایگانی کن",
-      danger: false,
+  const setBusy = (pid, on) => {
+    setPending((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(pid);
+      else next.delete(pid);
+      return next;
     });
-    if (!ok) return;
+  };
+
+  // بایگانی فوری با چک‌باکس — بدون تأیید
+  const archive = async (p) => {
+    if (pending.has(p.id)) return;
+    setBusy(p.id, true);
+    setData((d) => (d ? { ...d, products: d.products.filter((x) => x.id !== p.id) } : d));
+    setActiveCount?.((c) => Math.max(0, (c ?? 1) - 1));
     try {
       await api.post(`/api/products/${p.id}/toggle-order`);
-      toast("به بایگانی منتقل شد", "success");
+      toast(`«${p.product_name}» بایگانی شد`, "success");
       load();
       refresh();
     } catch (err) {
       toast(err.message, "error");
+      load();
+      refresh();
+    } finally {
+      setBusy(p.id, false);
     }
   };
 
+  // بازگردانی فوری با برداشتن تیک — بدون تأیید
   const unarchive = async (p) => {
+    if (pending.has(p.id)) return;
+    setBusy(p.id, true);
+    setData((d) => {
+      if (!d) return d;
+      const groups = {};
+      for (const [key, group] of Object.entries(d.groups ?? {})) {
+        const left = group.products.filter((x) => x.id !== p.id);
+        if (left.length) groups[key] = { ...group, products: left };
+      }
+      return { ...d, groups };
+    });
+    setActiveCount?.((c) => (c ?? 0) + 1);
     try {
       await api.post(`/api/products/${p.id}/unarchive`);
-      toast("به لیست فعال برگشت", "success");
+      toast(`«${p.product_name}» به لیست فعال برگشت`, "success");
       load();
       refresh();
     } catch (err) {
       toast(err.message, "error");
+      load();
+      refresh();
+    } finally {
+      setBusy(p.id, false);
     }
   };
 
@@ -155,6 +183,7 @@ export default function SupplierDetail() {
           {products.length === 0 ? (
             <div className="card">
               <EmptyState
+                image="/img/empty-purchases.png"
                 title="لیست فعال خالی است"
                 text="برای این تأمین‌کننده هنوز خرید فعالی ثبت نشده."
                 action={
@@ -168,7 +197,18 @@ export default function SupplierDetail() {
             <StaggerList style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {products.map((p) => (
                 <StaggerItem key={p.id}>
-                  <motion.div layout className={`product-row ${highlight === p.id ? "highlight" : ""}`}>
+                  <motion.div
+                    layout
+                    className={`product-row ${highlight === p.id ? "highlight" : ""}`}
+                    animate={highlight === p.id ? { scale: [1, 1.015, 1] } : {}}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <ArchiveCheck
+                      checked={false}
+                      pending={pending.has(p.id)}
+                      title="بایگانی"
+                      onToggle={() => archive(p)}
+                    />
                     <span className="pr-icon">
                       <ShoppingCart size={18} />
                     </span>
@@ -187,9 +227,6 @@ export default function SupplierDetail() {
                       {p.quantity} {p.unit}
                     </span>
                     <div className="pr-actions">
-                      <button className="btn btn-sm btn-success tip" data-tip="بایگانی" onClick={() => archive(p)}>
-                        <Archive size={15} />
-                      </button>
                       <button className="btn btn-sm btn-ghost tip" data-tip="ویرایش" onClick={() => setModal({ open: true, product: p })}>
                         <Pencil size={15} />
                       </button>
@@ -229,8 +266,23 @@ export default function SupplierDetail() {
                         </button>
                       </div>
                       <div className="ag-rows">
+                        <AnimatePresence initial={false}>
                         {group.products.map((p) => (
-                          <motion.div key={p.id} layout className="product-row" style={{ opacity: 0.85 }}>
+                          <motion.div
+                            key={p.id}
+                            layout
+                            className="product-row"
+                            style={{ opacity: 0.85 }}
+                            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                            animate={{ opacity: 0.85, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: 60, scale: 0.94, transition: { duration: 0.22, ease: "easeIn" } }}
+                          >
+                            <ArchiveCheck
+                              checked={true}
+                              pending={pending.has(p.id)}
+                              title="بازگردانی به لیست فعال"
+                              onToggle={() => unarchive(p)}
+                            />
                             <span className="pr-icon" style={{ background: "var(--success-soft)", color: "var(--success)" }}>
                               <Archive size={17} />
                             </span>
@@ -239,13 +291,9 @@ export default function SupplierDetail() {
                               {p.description && <div className="pr-desc"><span>{p.description}</span></div>}
                             </div>
                             <span className="pr-qty">{p.quantity} {p.unit}</span>
-                            <div className="pr-actions">
-                              <button className="btn btn-sm tip" data-tip="بازگردانی" onClick={() => unarchive(p)}>
-                                <ArchiveRestore size={15} />
-                              </button>
-                            </div>
                           </motion.div>
                         ))}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </StaggerItem>
@@ -263,9 +311,13 @@ export default function SupplierDetail() {
         suppliers={data?.suppliers ?? []}
         productNames={[]}
         onClose={() => setModal({ open: false, product: null })}
-        onSaved={() => {
+        onSaved={(saved) => {
           load();
           refresh();
+          if (saved?.id) {
+            setHighlight(saved.id);
+            setTimeout(() => setHighlight((h) => (h === saved.id ? null : h)), 2600);
+          }
         }}
       />
     </div>

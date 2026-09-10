@@ -78,6 +78,7 @@ export default function SearchPage() {
       {!loading && q.trim().length >= 2 && !hasResults && (
         <div className="card">
           <EmptyState
+            image="/img/empty-search.png"
             title="نتیجه‌ای پیدا نشد"
             text={`چیزی مطابق «${q.trim()}» بین خریدها و تأمین‌کننده‌های شما نیست.`}
           />
@@ -148,7 +149,7 @@ export default function SearchPage() {
       {q.trim().length < 2 && (
         <div className="card">
           <EmptyState
-            icon={<SearchIcon size={30} />}
+            image="/img/empty-search.png"
             title="جستجو در همه‌چیز"
             text="حداقل دو حرف بنویسید تا بین محصولات فعال و بایگانی و تأمین‌کننده‌ها جستجو شود. (Ctrl+K)"
           />

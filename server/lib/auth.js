@@ -148,6 +148,29 @@ export function clearSessionCookie(res) {
     path: "/",
     maxAge: 0,
   });
+  // گونه‌ی قدیمیِ بدون Partitioned هم اگر مانده باشد پاک شود
+  if (!COOKIE_INSECURE) {
+    res.cookie(SESSION_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      path: "/",
+      maxAge: 0,
+    });
+  }
+}
+
+// پاک‌سازی کوکی پشتیبانِ نوشته‌شده توسط کلاینت (با و بدون Partitioned)
+export function clearClientTokenCookie(res) {
+  const variants = COOKIE_INSECURE
+    ? [{ sameSite: "lax", secure: false }]
+    : [
+        { sameSite: "none", secure: true, partitioned: true },
+        { sameSite: "none", secure: true },
+      ];
+  for (const v of variants) {
+    res.cookie(CLIENT_TOKEN_COOKIE, "", { ...v, path: "/", maxAge: 0 });
+  }
 }
 
 // ─── میدل‌ورها ───────────────────────────────────────────────────────────────
