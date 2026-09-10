@@ -24,6 +24,7 @@ ENV NODE_ENV=production \
     PORT=3000
 COPY --from=deps /app/node_modules ./node_modules
 COPY server ./server
+COPY tools ./tools
 COPY --from=web /app/client/dist ./client/dist
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
