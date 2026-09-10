@@ -12,11 +12,12 @@ import {
   TrendingUp,
   ShoppingBasket,
   ExternalLink,
+  Eraser,
 } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 import { fmtAmount, fmtShort } from "../format.js";
-import { EmptyState, SkeletonRows, StaggerItem, StaggerList } from "../components/bits.jsx";
+import { BtnSpinner, EmptyState, SkeletonRows, StaggerItem, StaggerList } from "../components/bits.jsx";
 import Modal from "../components/Modal.jsx";
 
 export default function Estimate() {
@@ -26,6 +27,8 @@ export default function Estimate() {
   const [budgetInput, setBudgetInput] = useState("");
   const [priceModal, setPriceModal] = useState(null); // {product}
   const [savingItem, setSavingItem] = useState(null);
+  const [budgetBusy, setBudgetBusy] = useState(false);
+  const [trimBusy, setTrimBusy] = useState(false);
 
   const load = useCallback(async (supplierId = filter) => {
     const d = await api
@@ -43,21 +46,46 @@ export default function Estimate() {
   }, [filter]);
 
   const saveBudget = async () => {
+    if (budgetBusy) return;
+    setBudgetBusy(true);
     try {
       const d = await api.post("/api/estimate/budget", { budget: budgetInput });
       setSnap(d);
       setBudgetInput(d.budget ?? "");
-      toast("سقف بودجه ذخیره شد", "success");
+      toast(d.price_unit_note || "سقف بودجه ذخیره شد", "success");
     } catch (err) {
       toast(err.message, "error");
+    } finally {
+      setBudgetBusy(false);
     }
   };
 
   const saveItemField = async (product, patch) => {
     setSavingItem(product.id);
     try {
-      const d = await api.post(`/api/estimate/item/${product.id}`, patch);
+      // قیمت که پاک شود، لینک هم همراهش پاک می‌شود (سرور هم همین قانون را دارد)
+      const body = { ...patch };
+      if ("unit_price" in body && !String(body.unit_price ?? "").trim() && !("price_url" in body)) {
+        body.price_url = "";
+      }
+      const d = await api.post(`/api/estimate/item/${product.id}`, body);
       setSnap(d);
+      if (d.price_unit_note) toast(d.price_unit_note, "info");
+    } catch (err) {
+      toast(err.message, "error");
+      load();
+    } finally {
+      setSavingItem(null);
+    }
+  };
+
+  const clearPrice = async (product) => {
+    if (!product.unit_price && !product.price_url) return;
+    setSavingItem(product.id);
+    try {
+      const d = await api.post(`/api/estimate/item/${product.id}`, { unit_price: "", price_url: "" });
+      setSnap(d);
+      toast(`قیمت و لینک «${product.product_name}» پاک شد`, "info");
     } catch (err) {
       toast(err.message, "error");
       load();
@@ -87,7 +115,7 @@ export default function Estimate() {
   };
 
   const trimToBudget = async () => {
-    if (!snap?.over_budget) return;
+    if (!snap?.over_budget || trimBusy) return;
     const ok = await confirm({
       title: "برش لیست تا سقف بودجه",
       message:
@@ -96,6 +124,7 @@ export default function Estimate() {
       danger: false,
     });
     if (!ok) return;
+    setTrimBusy(true);
     try {
       const d = await api.post("/api/estimate/trim-to-budget", {
         supplier_id: filter || undefined,
@@ -113,6 +142,8 @@ export default function Estimate() {
       }
     } catch (err) {
       toast(err.message, "error");
+    } finally {
+      setTrimBusy(false);
     }
   };
 
@@ -137,6 +168,7 @@ export default function Estimate() {
           </h2>
           <p className="page-sub">
             قیمت هر قلم را وارد کنید تا جمع کل و وضعیت بودجه‌تان زنده محاسبه شود.
+            قیمت‌ها به تومان‌اند؛ اگر مبلغی ریالی است کافی است کلمه‌ی «ریال» را کنارش بنویسید تا خودش تبدیل شود.
           </p>
         </div>
         <div className="page-actions">
@@ -168,11 +200,12 @@ export default function Estimate() {
               className="input mono"
               value={budgetInput}
               onChange={(e) => setBudgetInput(e.target.value)}
-              placeholder="سقف بودجه…"
+              placeholder="سقف بودجه (تومان)…"
+              title="به تومان وارد کنید؛ برای مبلغ ریالی، کلمه‌ی «ریال» را کنار عدد بنویسید"
               style={{ direction: "ltr" }}
             />
-            <button className="btn" onClick={saveBudget}>
-              ثبت بودجه
+            <button className="btn" onClick={saveBudget} disabled={budgetBusy}>
+              {budgetBusy ? <BtnSpinner size={15} /> : null} ثبت بودجه
             </button>
           </div>
         </div>
@@ -210,8 +243,8 @@ export default function Estimate() {
                   <span style={{ fontSize: 12.5, color: "var(--danger)", fontWeight: 700, flex: 1, minWidth: 180 }}>
                     جمع برآورد {fmtAmount(snap.over_by)} تومان از بودجه‌تان بیشتر است.
                   </span>
-                  <button className="btn btn-danger" onClick={trimToBudget}>
-                    <Scissors size={15} /> برش خودکار تا سقف بودجه
+                  <button className="btn btn-danger" onClick={trimToBudget} disabled={trimBusy}>
+                    {trimBusy ? <BtnSpinner size={15} /> : <Scissors size={15} />} برش خودکار تا سقف بودجه
                   </button>
                 </motion.div>
               )}
@@ -225,6 +258,7 @@ export default function Estimate() {
       {snap.items.length === 0 ? (
         <div className="card">
           <EmptyState
+            image="/img/empty-wallet.png"
             title="قلمی برای برآورد نیست"
             text="اول چند خرید فعال ثبت کنید تا بتوانید برایشان برآورد قیمت بزنید."
           />
@@ -247,7 +281,8 @@ export default function Estimate() {
                     className="input mono"
                     defaultValue={p.unit_price ?? ""}
                     key={`price-${p.id}-${p.unit_price ?? ""}`}
-                    placeholder="قیمت واحد"
+                    placeholder="قیمت واحد (تومان)"
+                    title="به تومان وارد کنید؛ برای مبلغ ریالی، کلمه‌ی «ریال» را کنار عدد بنویسید"
                     style={{ direction: "ltr", minWidth: 110 }}
                     onBlur={(e) => {
                       if ((e.target.value ?? "") !== (p.unit_price ?? "")) {
@@ -290,6 +325,16 @@ export default function Estimate() {
                     <a className="btn btn-sm btn-ghost tip" data-tip="باز کردن لینک" href={p.price_url} target="_blank" rel="noreferrer">
                       <ExternalLink size={14} />
                     </a>
+                  )}
+                  {(p.unit_price || p.price_url) && (
+                    <button
+                      className="btn btn-sm btn-ghost tip"
+                      data-tip="پاک کردن قیمت و لینک"
+                      style={{ color: "var(--danger)" }}
+                      onClick={() => clearPrice(p)}
+                    >
+                      <Eraser size={14} />
+                    </button>
                   )}
                 </div>
                 <span className="er-total mono">
@@ -375,10 +420,11 @@ export default function Estimate() {
       <PriceSearchModal
         state={priceModal}
         onClose={() => setPriceModal(null)}
-        onPick={(product, price) => {
+        onPick={(product, result) => {
           setPriceModal(null);
-          saveItemField(product, { unit_price: String(price) });
-          toast(`قیمت ${fmtAmount(price)} برای «${product.product_name}» ثبت شد`, "success");
+          // قیمت + لینک صفحه‌ی همان نتیجه با هم ذخیره می‌شوند
+          saveItemField(product, { unit_price: String(result.price), price_url: result.url || "" });
+          toast(`قیمت ${fmtAmount(result.price)} برای «${product.product_name}» ثبت شد`, "success");
         }}
       />
     </div>
@@ -439,7 +485,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
           <option value="basalam">باسلام</option>
         </select>
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? "…" : "جستجو"}
+          {busy ? <BtnSpinner size={15} /> : "جستجو"}
         </button>
       </form>
 
@@ -477,7 +523,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
                     </div>
                     <div style={{ textAlign: "left" }}>
                       <div className="prc-price">{r.price_label}</div>
-                      <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }} onClick={() => onPick(state.product, r.price)}>
+                      <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }} onClick={() => onPick(state.product, r)}>
                         انتخاب قیمت
                       </button>
                     </div>

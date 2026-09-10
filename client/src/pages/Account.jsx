@@ -16,11 +16,62 @@ import {
   RefreshCw,
   BadgeCheck,
   Crown as CrownIcon,
+  Smartphone,
+  ChevronDown,
 } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 import { fmtAmount } from "../format.js";
-import { SkeletonRows } from "../components/bits.jsx";
+import { SkeletonRows, BtnSpinner } from "../components/bits.jsx";
+
+// راهنمای قدم‌به‌قدم ساخت شورتکات در آیفون
+function ShortcutGuide() {
+  const [open, setOpen] = useState(false);
+  const steps = [
+    "برنامه‌ی Shortcuts را باز کنید و یک میانبر جدید بسازید.",
+    "اکشن «Ask for Input» را اضافه کنید تا نام محصول را بپرسد (مثلاً «چی بخرم؟»).",
+    "اکشن «Get Contents of URL» را اضافه کنید؛ آدرس را https://app.listia.ir/api/quick-add بگذارید و متد را POST کنید.",
+    "در بخش Headers یک هدر با نام X-API-Key و مقدار کلید شخصی بالا اضافه کنید.",
+    "بدنه (Request Body) را JSON بگذارید و بنویسید: { \"product\": \"[ورودی مرحله ۲]\", \"quantity\": \"1\", \"unit\": \"عدد\" }",
+    "میانبر را ذخیره کنید (مثلاً «ثبت خرید») — حالا با سیری یا ویجت، بدون باز کردن اپ خرید ثبت می‌شود!",
+  ];
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button type="button" className="btn btn-sm" onClick={() => setOpen((v) => !v)} style={{ width: "100%", justifyContent: "space-between" }}>
+        <span className="flex items-center gap-8">
+          <Smartphone size={15} /> آموزش ساخت شورتکات آیفون
+        </span>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} style={{ display: "grid" }}>
+          <ChevronDown size={15} />
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.ol
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: "hidden", margin: 0, padding: "12px 20px 4px 4px", fontSize: 12.5, lineHeight: 2.1, color: "var(--text-2)" }}
+          >
+            {steps.map((s, i) => (
+              <motion.li
+                key={i}
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.06 * i }}
+                style={{ marginBottom: 6 }}
+              >
+                <b style={{ color: "var(--text-1)" }}>{i + 1}. </b>
+                <span className="mono" style={{ fontSize: 12 }}>{s}</span>
+              </motion.li>
+            ))}
+          </motion.ol>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export default function Account() {
   const { toast, confirm, refresh } = useApp();
@@ -106,7 +157,7 @@ export default function Account() {
               <input className="input" value={user.username} disabled style={{ opacity: 0.6 }} />
             </div>
             <button className="btn btn-primary" disabled={busy === "profile"}>
-              {busy === "profile" ? "…" : "ذخیره‌ی مشخصات"}
+              {busy === "profile" ? <><BtnSpinner /> در حال ذخیره…</> : "ذخیره‌ی مشخصات"}
             </button>
           </form>
 
@@ -183,7 +234,7 @@ export default function Account() {
                   onChange={(e) => setLicenseKey(e.target.value)}
                 />
                 <button className="btn btn-primary" disabled={busy === "license" || !licenseKey.trim()}>
-                  فعال‌سازی
+                  {busy === "license" ? <BtnSpinner /> : "فعال‌سازی"}
                 </button>
               </form>
             </div>
@@ -220,16 +271,16 @@ export default function Account() {
               <input type="password" className="input" style={{ direction: "ltr" }} value={passwords.confirm_password} onChange={(e) => setPasswords((p) => ({ ...p, confirm_password: e.target.value }))} />
             </div>
             <button className="btn" disabled={busy === "password"}>
-              {busy === "password" ? "…" : "تغییر رمز"}
+              {busy === "password" ? <><BtnSpinner /> در حال تغییر…</> : "تغییر رمز"}
             </button>
           </form>
         </div>
 
-        {/* ─── کلید API ─── */}
+        {/* ─── کلید API + شورتکات آیفون ─── */}
         <div className="card">
           <div className="section-title">
             <span className="stt-icon"><Webhook size={17} /></span>
-            کلید شخصی (API)
+            کلید شخصی (API) و شورتکات آیفون
           </div>
           <p style={{ fontSize: 12.5, lineHeight: 2, color: "var(--text-2)", marginBottom: 12 }}>
             با این کلید می‌توانید بدون باز کردن اپ، از میانبرها (مثل Shortcuts آیفون) خرید ثبت کنید:
@@ -238,10 +289,15 @@ export default function Account() {
             <span style={{ flex: 1 }}>{api_token}</span>
             <Copy size={13} style={{ cursor: "pointer", flexShrink: 0 }} onClick={() => { navigator.clipboard?.writeText(api_token); toast("کلید کپی شد", "info", 1800); }} />
           </div>
-          <pre className="mono" style={{ fontSize: 11, lineHeight: 1.9, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 12, padding: 12, marginTop: 12, overflowX: "auto", direction: "ltr", textAlign: "left", color: "var(--text-2)" }}>{`POST /api/quick-add
+          <div className="token-box" style={{ marginTop: 8 }}>
+            <span style={{ flex: 1 }}>https://app.listia.ir/api/quick-add</span>
+            <Copy size={13} style={{ cursor: "pointer", flexShrink: 0 }} onClick={() => { navigator.clipboard?.writeText("https://app.listia.ir/api/quick-add"); toast("آدرس کپی شد", "info", 1800); }} />
+          </div>
+          <pre className="mono" style={{ fontSize: 11, lineHeight: 1.9, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 12, padding: 12, marginTop: 12, overflowX: "auto", direction: "ltr", textAlign: "left", color: "var(--text-2)" }}>{`POST https://app.listia.ir/api/quick-add
 X-API-Key: ${api_token}
 
 { "product": "شیر", "quantity": "2", "unit": "عدد" }`}</pre>
+          <ShortcutGuide />
           <button
             className="btn mt-12"
             disabled={busy === "token"}
@@ -254,7 +310,7 @@ X-API-Key: ${api_token}
               if (ok) action("token", () => api.post("/api/account/token"));
             }}
           >
-            <RefreshCw size={15} /> ساخت کلید جدید
+            {busy === "token" ? <BtnSpinner size={15} /> : <RefreshCw size={15} />} ساخت کلید جدید
           </button>
         </div>
 

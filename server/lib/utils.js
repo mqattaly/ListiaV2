@@ -57,23 +57,58 @@ export function formatAmount(value) {
 
 /** ورودی کاربر را برای ذخیره نرمال می‌کند (ارقام انگلیسی، بدون جداکننده). */
 export function storeAmount(raw) {
-  const number = parseAmount(raw);
-  if (number === null) return String(raw ?? "").trim().slice(0, 50);
+  const number = typeof raw === "number" ? raw : parseAmount(raw);
+  if (number === null || !Number.isFinite(number)) return String(raw ?? "").trim().slice(0, 50);
   if (Math.abs(number - Math.round(number)) < 1e-9) {
     return String(Math.round(number)).slice(0, 50);
   }
   return String(Number(number.toFixed(4))).slice(0, 50);
 }
 
-/** مقدار تخمین قیمت برای ذخیره: خالی → null، نامعتبر → خطا. */
+// ─── تشخیص هوشمند ریال/تومان ─────────────────────────────────────────────────
+
+const RIAL_WORD = /(ریال|ريال|rial|irr)/i;
+const TOMAN_WORD = /(تومان|تومن|تومان|toman|tt?oman|irt)/i;
+
+/** واحدِ نوشته‌شده داخل متن ورودی کاربر (مثل «۲۵٬۰۰۰٬۰۰۰ ریال»). */
+export function detectPriceUnit(raw) {
+  const text = String(raw ?? "");
+  if (!text.trim()) return null;
+  const hasRial = RIAL_WORD.test(text);
+  const hasToman = TOMAN_WORD.test(text);
+  if (hasRial && !hasToman) return "rial";
+  if (hasToman && !hasRial) return "toman";
+  return null;
+}
+
+/**
+ * قیمت ورودی کاربر را می‌خواند و همیشه به «تومان» برمی‌گرداند.
+ * اگر کلمه‌ی «ریال» (یا rial/irr) داخل متن باشد، خودش ÷۱۰ می‌کند؛
+ * عدد خالص بدون واحد، تومان فرض می‌شود (رفتار قبلی).
+ */
+export function parsePriceWithUnit(raw) {
+  const original = String(raw ?? "").trim();
+  if (!original) return { value: null, detectedUnit: null };
+  const detectedUnit = detectPriceUnit(original);
+  let text = original
+    .replace(/ریال|ريال|تومان|تومن|rial|toman|irr|irt/gi, "")
+    .replace(/[()]/g, "")
+    .trim();
+  const num = parseAmount(text);
+  if (num === null) return { value: null, detectedUnit: null };
+  if (detectedUnit === "rial") return { value: num / 10, detectedUnit };
+  return { value: num, detectedUnit };
+}
+
+/** مقدار تخمین قیمت برای ذخیره: خالی → null، نامعتبر → خطا. ریال را خودش به تومان تبدیل می‌کند. */
 export function estimateAmountForStorage(raw, label) {
   const text = String(raw ?? "").trim();
   if (!text) return null;
-  const number = parseAmount(text);
-  if (number === null || number < 0) {
+  const { value } = parsePriceWithUnit(text);
+  if (value === null || value < 0) {
     throw new Error(`${label} باید عددی معتبر باشد.`);
   }
-  return storeAmount(number);
+  return storeAmount(value);
 }
 
 // ─── تاریخ شمسی ─────────────────────────────────────────────────────────────

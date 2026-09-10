@@ -6,22 +6,29 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Archive,
   PackageCheck,
   ChevronDown,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
-import { EmptyState, SkeletonRows } from "../components/bits.jsx";
+import { ArchiveCheck, EmptyState, SkeletonRows } from "../components/bits.jsx";
 import ProductModal from "../components/ProductModal.jsx";
 
 export default function Purchases() {
   const { toast, confirm, refresh, setActiveCount } = useApp();
+  const [pending, setPending] = useState(() => new Set());
   const [data, setData] = useState(null);
   const [modal, setModal] = useState({ open: false, product: null });
   const [collapsed, setCollapsed] = useState(() => new Set());
+  const [highlight, setHighlight] = useState(null);
   const [params, setParams] = useSearchParams();
+
+  const flashRow = (id) => {
+    if (!id) return;
+    setHighlight(id);
+    setTimeout(() => setHighlight((h) => (h === id ? null : h)), 2600);
+  };
 
   const load = useCallback(async () => {
     const d = await api.get("/api/purchases").catch(() => null);
@@ -63,21 +70,31 @@ export default function Purchases() {
     });
   };
 
-  const archive = async (p) => {
-    const ok = await confirm({
-      title: "انتقال به بایگانی",
-      message: `«${p.product_name}» به بایگانیِ امروز منتقل شود؟ می‌توانید بعداً برش گردانید.`,
-      confirmLabel: "بله، بایگانی کن",
-      danger: false,
+  const setBusy = (id, on) => {
+    setPending((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
     });
-    if (!ok) return;
+  };
+
+  // بایگانی فوری با چک‌باکس — بدون تأیید، با حذف خوش‌بینانه از لیست
+  const archive = async (p) => {
+    if (pending.has(p.id)) return;
+    setBusy(p.id, true);
+    setData((d) => (d ? { ...d, products: d.products.filter((x) => x.id !== p.id) } : d));
+    setActiveCount((c) => Math.max(0, (c ?? 1) - 1));
     try {
       await api.post(`/api/products/${p.id}/toggle-order`);
-      toast("به بایگانی منتقل شد", "success");
-      load();
+      toast(`«${p.product_name}» بایگانی شد`, "success");
       refresh();
     } catch (err) {
       toast(err.message, "error");
+      load();
+      refresh();
+    } finally {
+      setBusy(p.id, false);
     }
   };
 
@@ -125,6 +142,7 @@ export default function Purchases() {
       ) : data.products.length === 0 ? (
         <div className="card">
           <EmptyState
+            image="/img/empty-purchases.png"
             title="هیچ خرید فعالی ندارید"
             text="اولین قلم خرید را ثبت کنید یا از صفحه‌ی تأمین‌کننده‌ها شروع کنید."
             action={
@@ -163,15 +181,23 @@ export default function Purchases() {
                     transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                     style={{ overflow: "hidden" }}
                   >
-                    {group.items.map((p) => (
+                    <AnimatePresence initial={false}>
+                      {group.items.map((p) => (
                       <motion.div
                         key={p.id}
-                        className="product-row"
+                        className={`product-row ${highlight === p.id ? "highlight" : ""}`}
                         layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: 30 }}
+                        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: 60, scale: 0.94, transition: { duration: 0.22, ease: "easeIn" } }}
+                        transition={{ layout: { type: "spring", stiffness: 350, damping: 30 } }}
                       >
+                        <ArchiveCheck
+                          checked={false}
+                          pending={pending.has(p.id)}
+                          title="بایگانی"
+                          onToggle={() => archive(p)}
+                        />
                         <span className="pr-icon">
                           <ShoppingCart size={18} />
                         </span>
@@ -194,13 +220,6 @@ export default function Purchases() {
                         </span>
                         <div className="pr-actions">
                           <button
-                            className="btn btn-sm btn-success tip"
-                            data-tip="بایگانی"
-                            onClick={() => archive(p)}
-                          >
-                            <Archive size={15} />
-                          </button>
-                          <button
                             className="btn btn-sm btn-ghost tip"
                             data-tip="ویرایش"
                             onClick={() => setModal({ open: true, product: p })}
@@ -217,7 +236,8 @@ export default function Purchases() {
                           </button>
                         </div>
                       </motion.div>
-                    ))}
+                      ))}
+                    </AnimatePresence>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -232,9 +252,10 @@ export default function Purchases() {
         suppliers={data?.suppliers ?? []}
         productNames={data?.product_names ?? []}
         onClose={() => setModal({ open: false, product: null })}
-        onSaved={() => {
+        onSaved={(saved) => {
           load();
           refresh();
+          flashRow(saved?.id);
         }}
       />
     </div>

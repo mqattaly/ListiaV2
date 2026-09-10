@@ -12,6 +12,7 @@ import {
   verifyPasswordHash,
   setSessionCookie,
   clearSessionCookie,
+  clearClientTokenCookie,
   createSessionToken,
   requestIP,
   recordAttempt,
@@ -267,6 +268,7 @@ router.post("/login", (req, res) => {
 // ─── POST /api/auth/logout ───────────────────────────────────────────────────
 router.post("/logout", (req, res) => {
   clearSessionCookie(res);
+  clearClientTokenCookie(res);
   res.json({ success: true, message: "با موفقیت خارج شدید." });
 });
 

@@ -1,4 +1,26 @@
-/* فونت‌ها — وزیرمتن (متغیر) + IBM Plex Mono برای اعداد */
+/* فونت‌ها — وزیر (Vazirmatn نسل جدید تایپ‌فیس وزیر) + IBM Plex Mono برای اعداد */
+/* «وزیرمتن» ادامه‌ی رسمی فونت وزیر از همان طراح است؛ هر دو نام به یک فایل اشاره می‌کنند */
+@font-face {
+  font-family: "Vazir";
+  src: url("../assets/fonts/vazirmatn-arabic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+}
+@font-face {
+  font-family: "Vazir";
+  src: url("../assets/fonts/vazirmatn-latin-ext.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+1E00-1EFF;
+}
+@font-face {
+  font-family: "Vazir";
+  src: url("../assets/fonts/vazirmatn-latin.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
 @font-face {
   font-family: "Vazirmatn";
   src: url("../assets/fonts/vazirmatn-arabic.woff2") format("woff2");

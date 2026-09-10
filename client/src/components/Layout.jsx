@@ -26,6 +26,8 @@ import { useApp } from "../context/AppContext.jsx";
 import { api, saveSessionToken } from "../api.js";
 import { initials, APP_VERSION } from "../format.js";
 import { AnimatedNumber } from "./bits.jsx";
+import PageErrorBoundary from "./ErrorBoundary.jsx";
+import FxBackdrop from "./FxBackdrop.jsx";
 
 function AuroraBackground() {
   return (
@@ -33,6 +35,7 @@ function AuroraBackground() {
       <div className="aurora-blob b1" />
       <div className="aurora-blob b2" />
       <div className="aurora-blob b3" />
+      <FxBackdrop />
     </div>
   );
 }
@@ -85,12 +88,15 @@ function UserMenu() {
   }, []);
 
   const logout = async () => {
-    saveSessionToken(null);
+    // اول سرور (پاک‌سازی کوکی‌های httpOnly) بعد حافظه‌ی محلی — هر دو لایه
     try {
       await api.post("/api/auth/logout");
     } catch { /* ignore */ }
-    toast("خارج شدید. به سلامت 👋", "info");
-    window.location.href = "/login";
+    saveSessionToken(null);
+    try {
+      sessionStorage.setItem("listia-just-logged-out", "1");
+    } catch { /* ignore */ }
+    window.location.replace("/login");
   };
 
   return (
@@ -271,6 +277,11 @@ export default function Layout() {
   const { user, theme, setTheme, activeCount = 0 } = useApp();
   const title = TITLES[location.pathname] ?? "لیستیا";
 
+  // با هر تعویض صفحه به بالا اسکرول کن
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+  }, [location.pathname]);
+
   return (
     <>
       <AuroraBackground />
@@ -314,19 +325,20 @@ export default function Layout() {
             </button>
           </header>
 
-          {/* ─── محتوا با ترنزیشن ─── */}
+          {/* ─── محتوا با ترنزیشن ورود ─── */}
+          {/* بدون mode="wait": حالت انتظارِ خروج گاهی گیر می‌کرد و صفحه خالی
+              می‌ماند؛ ورود انیمیشنی می‌ماند و خطای رندر هم به کارت بازیابی می‌رسد */}
           <main className="page-scroll">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 18, scale: 0.995 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -12, scale: 0.995 }}
-                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-              >
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 26, scale: 0.985, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              transition={{ type: "spring", stiffness: 210, damping: 28 }}
+            >
+              <PageErrorBoundary pageKey={location.pathname}>
                 <Outlet />
-              </motion.div>
-            </AnimatePresence>
+              </PageErrorBoundary>
+            </motion.div>
           </main>
         </div>
         <BottomNav activeCount={activeCount} />

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
-import { SkeletonRows, StaggerItem, StaggerList, EmptyState } from "../components/bits.jsx";
+import { SkeletonRows, StaggerItem, StaggerList, EmptyState, BtnSpinner } from "../components/bits.jsx";
 import Modal from "../components/Modal.jsx";
 
 export default function Admin() {
@@ -249,7 +249,7 @@ function EditUserModal({ user, onClose, onSaved }) {
         </div>
         <div className="flex gap-10 mt-8">
           <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy}>
-            {busy ? "…" : "ذخیره‌ی تغییرات"}
+            {busy ? <><BtnSpinner /> در حال ذخیره…</> : "ذخیره‌ی تغییرات"}
           </button>
           <button type="button" className="btn" onClick={onClose}>انصراف</button>
         </div>
@@ -329,7 +329,7 @@ function LicenseUserModal({ user, onClose, onSaved }) {
         </div>
         <div className="flex gap-10">
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={grant} disabled={busy}>
-            <Crown size={15} /> {user?.is_licensed ? "به‌روزرسانی لایسنس" : "اعطای لایسنس"}
+            {busy ? <BtnSpinner size={15} /> : <Crown size={15} />} {user?.is_licensed ? "به‌روزرسانی لایسنس" : "اعطای لایسنس"}
           </button>
           {user?.is_licensed && !user?.is_protected && (
             <button className="btn btn-danger" onClick={revoke} disabled={busy}>
@@ -427,7 +427,7 @@ function KeyGeneratorModal({ open, onClose }) {
                 <button type="button" className={`switch ${form.is_master ? "on" : ""}`} onClick={() => setForm((f) => ({ ...f, is_master: !f.is_master }))} />
               </div>
               <button className="btn btn-primary btn-lg" disabled={busy || (!form.is_master && !form.identifier.trim())}>
-                {busy ? "…" : "تولید کلید"}
+                {busy ? <><BtnSpinner /> در حال تولید…</> : "تولید کلید"}
               </button>
             </motion.div>
           )}

@@ -88,6 +88,18 @@ export default function ImportPage() {
         <p style={{ fontSize: 12.5, color: "var(--text-3)", fontWeight: 600 }}>
           یا برای انتخاب کلیک کنید — پشتیبانی از CSV و XLSX تا ۸ مگابایت
         </p>
+        <AnimatePresence>
+          {busy && (
+            <motion.div
+              className="dz-progress"
+              initial={{ opacity: 0, scaleX: 0.6 }}
+              animate={{ opacity: 1, scaleX: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <span />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <input
           ref={inputRef}
           type="file"

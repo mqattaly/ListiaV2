@@ -60,8 +60,25 @@ function GuestOnly({ children }) {
 
 function NotFound() {
   return (
-    <div className="card" style={{ textAlign: "center", padding: 60 }}>
-      <h2 style={{ fontSize: 44 }} className="text-gradient mono">404</h2>
+    <div className="card">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      >
+        <EmptyState404 />
+      </motion.div>
+    </div>
+  );
+}
+
+function EmptyState404() {
+  return (
+    <div className="empty-state">
+      <div className="empty-img loaded" style={{ width: 190, height: 190 }}>
+        <img src="/img/empty-search.png" alt="صفحه پیدا نشد" loading="lazy" />
+      </div>
+      <h2 style={{ fontSize: 40 }} className="text-gradient mono">404</h2>
       <p className="muted" style={{ margin: "10px 0 20px" }}>این صفحه در لیستیا وجود ندارد.</p>
     </div>
   );

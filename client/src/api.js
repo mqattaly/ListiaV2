@@ -22,7 +22,11 @@ function writeCookieToken(token) {
       document.cookie =
         `${COOKIE_KEY}=${encodeURIComponent(token)}; path=/; max-age=2592000; SameSite=None; Secure; Partitioned;`;
     } else {
-      document.cookie = `${COOKIE_KEY}=; path=/; max-age=0; SameSite=None; Secure`;
+      // حذف باید دقیقاً با همان ویژگی‌ها انجام شود؛ وگرنه کوکی‌ی Partitioned
+      // سر جایش می‌ماند و کاربر عملاً خارج نمی‌شود. هر سه گونه را پاک می‌کنیم.
+      document.cookie = `${COOKIE_KEY}=; path=/; max-age=0; SameSite=None; Secure; Partitioned;`;
+      document.cookie = `${COOKIE_KEY}=; path=/; max-age=0; SameSite=None; Secure;`;
+      document.cookie = `${COOKIE_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
     }
   } catch {
     /* کوکی قابل نوشتن نیست */
