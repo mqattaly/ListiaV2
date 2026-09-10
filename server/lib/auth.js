@@ -53,18 +53,54 @@ export function hashPassword(password) {
 
 export function verifyPasswordHash(stored, candidate) {
   try {
-    const [params, saltB64, hashB64] = String(stored ?? "").split("$");
-    if (!params || !saltB64 || !hashB64) return false;
-    const [scheme, n, r, p] = params.split(":");
-    if (scheme !== "scrypt") return false;
-    const salt = Buffer.from(saltB64, "base64");
-    const expected = Buffer.from(hashB64, "base64");
-    const actual = crypto.scryptSync(String(candidate ?? ""), salt, expected.length, {
-      N: parseInt(n, 10),
-      r: parseInt(r, 10),
-      p: parseInt(p, 10),
-    });
-    return crypto.timingSafeEqual(expected, actual);
+    const [params, saltPart, hashPart] = String(stored ?? "").split("$");
+    if (!params || !saltPart || !hashPart) return false;
+    const [scheme, ...nums] = params.split(":");
+    const password = String(candidate ?? "");
+
+    // Werkzeug پایتون هش را hex می‌نویسد و نمک را «رشته‌ی خام» به‌عنوان نمک
+    // استفاده می‌کند؛ نسخه‌ی Node ما هر دو را base64. برای سازگاری کامل با
+    // دیتابیس‌های نسخه‌ی پایتون، هر دو تفسیر امتحان می‌شود.
+    const isHex = (s) => /^[0-9a-f]+$/i.test(s) && s.length % 2 === 0;
+    let expected;
+    if (isHex(hashPart)) expected = Buffer.from(hashPart, "hex");
+    else expected = Buffer.from(hashPart, "base64");
+    const saltVariants = [Buffer.from(saltPart, "utf8")];
+    if (!isHex(saltPart)) {
+      const b = Buffer.from(saltPart, "base64");
+      if (b.length) saltVariants.push(b);
+    }
+
+    if (scheme === "scrypt") {
+      const N = parseInt(nums[0], 10);
+      const r = parseInt(nums[1], 10);
+      const p = parseInt(nums[2], 10);
+      if (!N || !r || !p) return false;
+      // فرمول maxmem مثل Werkzeug + حاشیه‌ی امنیت
+      const maxmem = 132 * N * r * p + 64 * 1024 * 1024;
+      for (const salt of saltVariants) {
+        try {
+          const actual = crypto.scryptSync(password, salt, expected.length, { N, r, p, maxmem });
+          if (actual.length === expected.length && crypto.timingSafeEqual(actual, expected)) return true;
+        } catch { /* پارامتر نامعتبر — تفسیر بعدی */ }
+      }
+      return false;
+    }
+
+    if (scheme === "pbkdf2") {
+      const hashName = nums[0];
+      const iterations = parseInt(nums[1], 10);
+      if (!hashName || !iterations) return false;
+      for (const salt of saltVariants) {
+        try {
+          const actual = crypto.pbkdf2Sync(password, salt, iterations, expected.length, hashName);
+          if (actual.length === expected.length && crypto.timingSafeEqual(actual, expected)) return true;
+        } catch { /* الگوریتم نامعتبر — تفسیر بعدی */ }
+      }
+      return false;
+    }
+
+    return false;
   } catch {
     return false;
   }
