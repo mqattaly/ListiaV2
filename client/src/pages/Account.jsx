@@ -1,11 +1,11 @@
 // حساب کاربری: پروفایل، لایسنس، رمز، کلید API، اشتراک‌گذاری
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserRound,
   Crown,
   Gem,
-  KeyRound,
   Lock,
   Webhook,
   Users,
@@ -14,8 +14,6 @@ import {
   LogOut,
   Copy,
   RefreshCw,
-  BadgeCheck,
-  Crown as CrownIcon,
   Smartphone,
   ChevronDown,
 } from "lucide-react";
@@ -23,7 +21,6 @@ import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 import { fmtAmount } from "../format.js";
 import { SkeletonRows, BtnSpinner } from "../components/bits.jsx";
-import LicensePlans from "../components/LicensePlans.jsx";
 
 // راهنمای قدم‌به‌قدم ساخت شورتکات در آیفون
 function ShortcutGuide() {
@@ -79,7 +76,6 @@ export default function Account() {
   const [data, setData] = useState(null);
   const [profile, setProfile] = useState({ first_name: "", last_name: "", phone: "" });
   const [passwords, setPasswords] = useState({ current_password: "", new_password: "", confirm_password: "" });
-  const [licenseKey, setLicenseKey] = useState("");
   const [shareUsername, setShareUsername] = useState("");
   const [busy, setBusy] = useState("");
 
@@ -124,7 +120,7 @@ export default function Account() {
           <h2>
             <UserRound size={21} className="text-gradient" /> حساب کاربری
           </h2>
-          <p className="page-sub">مشخصات، لایسنس، کلید API و اشتراک‌گذاری داده با همکاران</p>
+          <p className="page-sub">مشخصات فردی، تغییر رمز، کلید API و اشتراک‌گذاری داده با همکاران</p>
         </div>
       </div>
 
@@ -176,7 +172,7 @@ export default function Account() {
           </div>
         </div>
 
-        {/* ─── لایسنس ─── */}
+        {/* ─── لایسنس (در صفحه‌ی جداگانه) ─── */}
         <div className="card">
           <div className="section-title">
             <span className="stt-icon" style={limits.is_licensed ? { background: "var(--accent-grad)", color: "#fff" } : undefined}>
@@ -184,76 +180,16 @@ export default function Account() {
             </span>
             لایسنس لیستیا
           </div>
-
-          {limits.is_licensed ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div className="flex gap-8 wrap">
-                <span className="badge badge-success"><BadgeCheck size={13} /> فعال</span>
-                <span className="badge">{limits.license_type}</span>
-                {limits.is_lifetime ? (
-                  <span className="badge badge-accent">مادام‌العمر</span>
-                ) : (
-                  <span className={`badge ${limits.is_expired ? "badge-danger" : ""}`}>
-                    {limits.is_expired ? "منقضی شده" : `${limits.remaining_days} روز مانده`}
-                    {limits.expires_at_label ? ` · ${limits.expires_at_label}` : ""}
-                  </span>
-                )}
-              </div>
-              <div className="token-box">
-                <KeyRound size={14} style={{ flexShrink: 0 }} />
-                {limits.license_key || "—"}
-              </div>
-              <p className="hint-text">
-                شناسه‌ی فعال‌سازی شما (برای پشتیبانی): <b className="mono">{limits.user_code}</b>
-              </p>
-              <details className="lp-renew">
-                <summary>تمدید یا ارتقای لایسنس (مشاهده‌ی تعرفه)</summary>
-                <div style={{ marginTop: 12 }}>
-                  <LicensePlans userCode={limits.user_code} compact />
-                  <p className="hint-text" style={{ marginTop: 10 }}>
-                    برای تمدید، همان شناسه‌ی فعال‌سازی بالا را پس از پرداخت به پشتیبانی بفرستید.
-                  </p>
-                </div>
-              </details>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <p style={{ fontSize: 13, lineHeight: 2, color: "var(--text-2)" }}>
-                نسخه‌ی آزمایشی: {limits.supplier_count}/{limits.max_suppliers} تأمین‌کننده و{" "}
-                {limits.product_count}/{limits.max_products} محصول. برای نامحدود‌شدن، یکی از پلن‌های
-                زیر را تهیه کنید یا اگر کلید لایسنس دارید آن را وارد کنید.
-              </p>
-
-              <LicensePlans userCode={limits.user_code} />
-
-              <div style={{ height: 2, background: "var(--border)", borderRadius: 2, margin: "2px 0" }} />
-
-              <div className="token-box" style={{ justifyContent: "space-between" }}>
-                <span style={{ color: "var(--text-3)", fontSize: 11.5 }}>شناسه‌ی شما:</span>
-                <b>{limits.user_code}</b>
-                <Copy size={13} style={{ cursor: "pointer" }} onClick={() => { navigator.clipboard?.writeText(limits.user_code); toast("کپی شد", "info", 1600); }} />
-              </div>
-              <form
-                className="flex gap-8"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  action("license", () => api.post("/api/account/license", { license_key: licenseKey }));
-                  setLicenseKey("");
-                }}
-              >
-                <input
-                  className="input mono"
-                  style={{ direction: "ltr", textAlign: "left" }}
-                  placeholder="کلید لایسنس (LST-…) را اینجا وارد کنید"
-                  value={licenseKey}
-                  onChange={(e) => setLicenseKey(e.target.value)}
-                />
-                <button className="btn btn-primary" disabled={busy === "license" || !licenseKey.trim()}>
-                  {busy === "license" ? <BtnSpinner /> : "فعال‌سازی"}
-                </button>
-              </form>
-            </div>
-          )}
+          <p style={{ fontSize: 13, lineHeight: 2, color: "var(--text-2)", margin: "0 0 14px" }}>
+            {limits.is_licensed
+              ? limits.is_lifetime
+                ? "لایسنس مادام‌العمر شما فعال است."
+                : `لایسنس شما تا ${limits.expires_at_label || "—"} (${limits.remaining_days} روز) فعال است.`
+              : "وضعیت لایسنس، تعرفه، خرید و فعال‌سازی کلید در صفحه‌ی لایسنس قابل مشاهده است."}
+          </p>
+          <Link to="/license" className="btn btn-primary" style={{ justifyContent: "center" }}>
+            {limits.is_licensed ? <><Crown size={16} /> مشاهده‌ی لایسنس و تمدید</> : <><Gem size={16} /> مشاهده‌ی تعرفه و خرید</>}
+          </Link>
         </div>
 
         {/* ─── تغییر رمز ─── */}

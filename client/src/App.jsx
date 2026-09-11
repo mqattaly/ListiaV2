@@ -15,6 +15,7 @@ const SearchPage = lazy(() => import("./pages/SearchPage.jsx"));
 const Estimate = lazy(() => import("./pages/Estimate.jsx"));
 const ImportPage = lazy(() => import("./pages/ImportPage.jsx"));
 const Account = lazy(() => import("./pages/Account.jsx"));
+const License = lazy(() => import("./pages/License.jsx"));
 const Admin = lazy(() => import("./pages/Admin.jsx"));
 
 function BootSplash() {
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/estimate" element={<Estimate />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/license" element={<License />} />
           <Route
             path="/admin"
             element={user?.is_admin ? <Admin /> : <Navigate to="/" replace />}

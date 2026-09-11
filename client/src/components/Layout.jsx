@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext.jsx";
 import { api, saveSessionToken } from "../api.js";
-import { initials, APP_VERSION } from "../format.js";
+import { initials } from "../format.js";
 import { AnimatedNumber } from "./bits.jsx";
 import PageErrorBoundary from "./ErrorBoundary.jsx";
 import FxBackdrop from "./FxBackdrop.jsx";
@@ -49,7 +49,6 @@ const NAV_MAIN = [
 ];
 const NAV_TOOLS = [
   { to: "/import", icon: Upload, label: "ایمپورت اکسل" },
-  { to: "/account", icon: UserRound, label: "حساب کاربری" },
 ];
 
 function SidebarLink({ to, icon: Icon, label, end, count }) {
@@ -127,8 +126,11 @@ function UserMenu() {
                 @{user?.username}
               </div>
             </div>
+            <button className="up-item" onClick={() => { setOpen(false); navigate("/license"); }}>
+              {user?.is_licensed ? <Crown size={17} /> : <Gem size={17} />} لایسنس من
+            </button>
             <button className="up-item" onClick={() => { setOpen(false); navigate("/account"); }}>
-              <UserRound size={17} /> حساب کاربری و لایسنس
+              <UserRound size={17} /> تنظیمات حساب
             </button>
             {user?.is_admin && (
               <button className="up-item" onClick={() => { setOpen(false); navigate("/admin"); }}>
@@ -157,7 +159,7 @@ function LicenseChip() {
   if (!limits) return null;
   const licensed = limits.is_licensed;
   return (
-    <NavLink to="/account" className={`license-chip ${licensed ? "pro" : "free"}`}>
+    <NavLink to="/license" className={`license-chip ${licensed ? "pro" : "free"}`}>
       <span className="lc-icon">{licensed ? <Crown size={17} /> : <Gem size={17} />}</span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span className="lc-title">{licensed ? "لایسنس فعال" : "نسخه آزمایشی"}</span>
@@ -198,17 +200,6 @@ function Sidebar({ activeCount }) {
 
       <div className="sidebar-foot">
         <LicenseChip />
-        <div
-          style={{
-            textAlign: "center",
-            fontSize: 10,
-            color: "var(--text-3)",
-            fontWeight: 700,
-            direction: "ltr",
-          }}
-        >
-          Listia v{APP_VERSION}
-        </div>
       </div>
     </aside>
   );
@@ -248,11 +239,11 @@ function BottomNav({ activeCount }) {
           </>
         )}
       </NavLink>
-      <NavLink to={user?.is_admin ? "/admin" : "/account"} className="bn-item">
+      <NavLink to={user?.is_admin ? "/admin" : "/license"} className="bn-item">
         {({ isActive }) => (
           <>
-            {user?.is_admin ? <ShieldCheck size={21} strokeWidth={isActive ? 2.4 : 2} /> : <UserRound size={21} strokeWidth={isActive ? 2.4 : 2} />}
-            {user?.is_admin ? "مدیریت" : "حساب"}
+            {user?.is_admin ? <ShieldCheck size={21} strokeWidth={isActive ? 2.4 : 2} /> : <Crown size={21} strokeWidth={isActive ? 2.4 : 2} />}
+            {user?.is_admin ? "مدیریت" : "لایسنس"}
           </>
         )}
       </NavLink>
@@ -267,6 +258,7 @@ const TITLES = {
   "/estimate": "برآورد قیمت",
   "/search": "جستجو",
   "/import": "ایمپورت از اکسل",
+  "/license": "لایسنس",
   "/account": "حساب کاربری",
   "/admin": "پنل مدیریت",
 };

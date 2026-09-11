@@ -29,6 +29,7 @@ import {
   passwordStrengthError,
   randomCode,
   parseUtc,
+  toEnDigits,
 } from "../lib/utils.js";
 import { adminUsernames, LICENSE_PLANS } from "../lib/licensing.js";
 import { getUserLimits, isAdminUser } from "../lib/queries.js";
@@ -339,7 +340,8 @@ router.post("/logout", (req, res) => {
 // ─── POST /api/auth/verify-email ─────────────────────────────────────────────
 router.post("/verify-email", ah(async (req, res) => {
   const body = req.body ?? {};
-  const code = String(body.code ?? "").trim();
+  // کیبورد موبایل ممکن است ارقام فارسی/عربی بفرستد؛ پیش از مقایسه یکسان‌سازی کن
+  const code = toEnDigits(String(body.code ?? "").trim());
   const email = normalizeEmail(body.email ?? "");
   const ip = requestIP(req);
 
@@ -392,25 +394,9 @@ router.post("/verify-email", ah(async (req, res) => {
   );
   const fresh = getUserById(user.id);
 
-  // ایمیل خوش‌آمد (معرفی دمو، تعرفه و نحوه‌ی خرید لایسنس). شکست در ارسال،
-  // تأیید موفق را خراب نمی‌کند — فقط در لاگ می‌ماند و کاربر می‌تواند بعداً وارد شود.
-  if (smtpConfigured()) {
-    try {
-      const msg = welcomeEmail({
-        firstName: fresh.first_name || fresh.username,
-        username: fresh.username,
-      });
-      await sendEmail(
-        fresh.email,
-        msg.subject,
-        { text: msg.text, html: msg.html },
-        { listUnsubscribe: true }
-      );
-    } catch (err) {
-      console.error("ارسال ایمیل خوش‌آمد ناموفق بود:", err?.message || err);
-    }
-  }
-
+  // پاسخ تأیید باید فوری برگردد؛ ایمیل خوش‌آمد غیرضروری است و اگر پیش از پاسخ
+  // همگام ارسال می‌شد، کندی/گیرکردن SMTP دکمه‌ی «تأیید» را بی‌واکنش می‌کرد.
+  // بعد از ارسال پاسخ، ایمیل در پس‌زمینه فرستاده می‌شود.
   res.json({
     success: true,
     message: "✓ ایمیل شما تأیید شد. خوش آمدید!",
@@ -418,6 +404,21 @@ router.post("/verify-email", ah(async (req, res) => {
     limits: getUserLimits(fresh),
     session_token: sessionFor(res, fresh),
   });
+
+  if (smtpConfigured()) {
+    const msg = welcomeEmail({
+      firstName: fresh.first_name || fresh.username,
+      username: fresh.username,
+    });
+    sendEmail(
+      fresh.email,
+      msg.subject,
+      { text: msg.text, html: msg.html },
+      { listUnsubscribe: true }
+    ).catch((err) =>
+      console.error("ارسال ایمیل خوش‌آمد ناموفق بود:", err?.message || err)
+    );
+  }
 }));
 
 // ─── POST /api/auth/resend-verification ──────────────────────────────────────

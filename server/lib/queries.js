@@ -56,9 +56,11 @@ export function getUserLimits(user, sCount = null, pCount = null) {
   let isLifetime = false;
   let remainingDays = null;
   let expiresLabel = null;
+  let periodDays = null;
 
   const expiresRaw = user.license_expires_at;
   const expiresAt = parseUtc(expiresRaw);
+  const licensedAt = parseUtc(user.licensed_at);
 
   if (admin) {
     isLic = true;
@@ -80,8 +82,21 @@ export function getUserLimits(user, sCount = null, pCount = null) {
         remainingDays = 0;
         expiresLabel = shamsiLabel(expiresRaw);
       }
+      // مدت کل اشتراک از روی تاریخ فعال‌سازی و انقضا (برای نوار پیشرفت)
+      if (licensedAt) {
+        periodDays = Math.max(1, Math.round((expiresAt.getTime() - licensedAt.getTime()) / 86400000));
+      }
     }
   }
+  const period_code = isLifetime
+    ? "LIFE"
+    : periodDays === 30
+      ? "30D"
+      : periodDays === 180
+        ? "180D"
+        : periodDays === 365
+          ? "365D"
+          : null;
 
   if (sCount === null || pCount === null) {
     const row = get(
@@ -109,9 +124,12 @@ export function getUserLimits(user, sCount = null, pCount = null) {
     can_add_product: isLic || pCount < FREE_MAX_PRODUCTS,
     license_type: isLic ? user.license_type || "free" : isExpired ? "expired" : "free",
     licensed_at: user.licensed_at ?? null,
+    licensed_at_label: user.licensed_at ? shamsiLabel(user.licensed_at) : null,
     license_expires_at: user.license_expires_at ?? null,
     expires_at_label: expiresLabel,
     remaining_days: remainingDays,
+    period_code,
+    period_days: periodDays,
     license_key: user.license_key ?? null,
   };
 }

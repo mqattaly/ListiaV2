@@ -932,3 +932,140 @@
   flex: 1;
   min-width: 200px;
 }
+
+/* ─── صفحه‌ی لایسنس ──────────────────────────────────────────────────────── */
+.license-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+.lic-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 26px 24px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.lic-hero .lic-glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.lic-active {
+  border-color: rgba(245, 184, 77, 0.45);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(245, 184, 77, 0.16), transparent 60%),
+    var(--surface-1);
+}
+.lic-free {
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(20, 87, 196, 0.14), transparent 60%),
+    var(--surface-1);
+}
+.lic-expired {
+  border-color: rgba(239, 68, 68, 0.4);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(239, 68, 68, 0.13), transparent 60%),
+    var(--surface-1);
+}
+.lic-hero-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lic-hero-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #1457c4, #1f8fec);
+  box-shadow: 0 10px 26px rgba(20, 87, 196, 0.35);
+}
+.lic-active .lic-hero-icon {
+  background: linear-gradient(135deg, #d59b2c, #f5b84d);
+  box-shadow: 0 10px 26px rgba(245, 184, 77, 0.4);
+}
+.lic-expired .lic-hero-icon {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  box-shadow: 0 10px 26px rgba(239, 68, 68, 0.35);
+}
+.lic-status {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-1);
+}
+.lic-type {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 3px;
+}
+.lic-badge-ok {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.lic-meta {
+  position: relative;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lic-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.9;
+}
+.lic-meta-row b { color: var(--text-1); }
+.lic-meta-row.lic-muted { color: var(--text-3); font-size: 12.5px; }
+.lic-warn { color: #d97706; }
+.lic-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.lic-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d59b2c, #f5b84d);
+}
+.lic-free-note,
+.lic-expired-note {
+  position: relative;
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 2.2;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.lic-expired-note {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.07);
+}
+.lic-key-card .token-box { direction: ltr; text-align: left; }
