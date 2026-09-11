@@ -9,7 +9,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { attachUser, requireAuth, hashPassword } from "./lib/auth.js";
-import { smtpConfigured } from "./lib/mailer.js";
+import { smtpConfigured, smtpMode } from "./lib/mailer.js";
 import { get, run, checkpoint, closeDb } from "./lib/db.js";
 
 import authRoutes from "./routes/auth.js";
@@ -144,10 +144,13 @@ async function bootstrapAdmin() {
     );
     return;
   }
-  run(
-    `INSERT INTO users (username, password_hash, first_name, last_name, phone, email,
+  // OR IGNORE + بازبینی changes: تداخل بوت چندورکره روی دیتابیس تازه نباید باعث
+  // خطای UNIQUE و کرش/پیام تکراری ورکر دوم شود
+  const info = run(
+    `INSERT OR IGNORE INTO users (username, password_hash, first_name, last_name, phone, email,
                         email_verified, is_licensed, license_type, is_admin)
-     VALUES (?, ?, ?, ?, ?, ?, 1, 1, 'UNLIMITED', 1)`,
+     SELECT ?, ?, ?, ?, ?, ?, 1, 1, 'UNLIMITED', 1
+      WHERE NOT EXISTS (SELECT 1 FROM users)`,
     username,
     await hashPassword(password),
     "مدیر",
@@ -155,6 +158,7 @@ async function bootstrapAdmin() {
     "09120000000",
     `${username}@listia.local`
   );
+  if (!Number(info?.changes)) return; // ورکرِ دیگری زودتر ادمین ساخته بود
   console.log(`\n👑 حساب مدیر اولیه ساخته شد → نام کاربری: «${username}» رمز: «${password}»`);
   console.log("   (با متغیرهای ADMIN_USERNAME / ADMIN_PASSWORD / ADMIN_AUTOBOOT قابل تغییر است)\n");
 }
@@ -208,7 +212,7 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   if (smtpConfigured()) {
     console.log(
       `📧 SMTP پیکربندی شده: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT || 465} ` +
-        `کاربر=${process.env.SMTP_USERNAME} (${Number(process.env.SMTP_PORT) === 465 ? "SSL" : "STARTTLS"})`
+        `کاربر=${process.env.SMTP_USERNAME} (${smtpMode()})`
     );
   } else if (process.env.NODE_ENV === "production") {
     console.warn(

@@ -1,6 +1,12 @@
-// ─── ارسال ایمیل تأیید (SMTP اختیاری) ───────────────────────────────────────
+// ─── ارسال ایمیل (SMTP اختیاری) ─────────────────────────────────────────────
 // اگر SMTP در محیط تنظیم نشده باشد، حالت توسعه فعال می‌شود: کد در پاسخ API
 // (فیلد dev_code) و کنسول سرور برگردانده می‌شود تا جریان ثبت‌نام کامل باشد.
+//
+// برای نرفتن به پوشه‌ی هرزنامه، رعایت این موارد روی دامنه ضروری است (سمت سرور ایمیل):
+//   ۱) رکورد SPF برای دامنه‌ی فرستنده که IP/سرور ایمیل چابوکان را مجاز کند
+//   ۲) امضای DKIM فعال و رکورد عمومی آن در DNS
+//   ۳) رکورد DMARC (حداقل p=none با آدرس گزارش)
+//   ۴) نشانی From حتماً همان حساب احرازشونده (info@دامنه) باشد
 
 export function smtpConfigured() {
   return Boolean(
@@ -14,6 +20,12 @@ function truthy(v) {
   return ["1", "true", "yes", "on"].includes((v ?? "").trim().toLowerCase());
 }
 
+export function smtpMode() {
+  const port = parseInt(process.env.SMTP_PORT || "465", 10);
+  const useSsl = truthy(process.env.SMTP_USE_SSL) || port === 465;
+  return useSsl ? "SSL" : "STARTTLS";
+}
+
 function settings() {
   const host = (process.env.SMTP_HOST ?? "").trim();
   const username = (process.env.SMTP_USERNAME ?? "").trim();
@@ -22,9 +34,11 @@ function settings() {
   // پورت ۴۶۵ = SSL از ابتدای اتصال؛ پورت ۵۸۷/۲۵ = STARTTLS (ارتقا پس از سلام)
   const useSsl = truthy(process.env.SMTP_USE_SSL) || port === 465;
   const fromEmail = (process.env.SMTP_FROM ?? "").trim() || username;
+  const replyTo = (process.env.SMTP_REPLY_TO ?? "").trim() || fromEmail;
+  const fromName = (process.env.SMTP_FROM_NAME ?? "").trim() || "لیستیا";
   // فقط برای سرورهای داخلی با گواهی self-signed؛ در حالت عادی نباید ۱ باشد
   const allowSelfSigned = truthy(process.env.SMTP_TLS_INSECURE);
-  return { host, username, password, port, useSsl, fromEmail, allowSelfSigned };
+  return { host, username, password, port, useSsl, fromEmail, replyTo, fromName, allowSelfSigned };
 }
 
 // اتصال یک‌بار ساخته و بازاستفاده می‌شود (به‌جای ساخت برای هر ایمیل)
@@ -55,10 +69,53 @@ async function getTransport() {
   return cached;
 }
 
-export async function sendEmail(toEmail, subject, body) {
-  const { fromEmail } = settings();
+function escapeText(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;");
+}
+
+/**
+ * ارسال ایمیل.
+ *   sendEmail(to, subject, "متن ساده")
+ *   sendEmail(to, subject, { text, html, headers, listUnsubscribe })
+ */
+export async function sendEmail(toEmail, subject, content, options = {}) {
+  const { fromName, fromEmail, replyTo } = settings();
   if (!smtpConfigured()) throw new Error("SMTP تنظیم نشده است.");
-  const transporter = await getTransport();
+
+  let text;
+  let html;
+  if (typeof content === "string") {
+    text = content;
+    html = `<div dir="rtl" style="font-family:Tahoma,sans-serif;font-size:14px;line-height:1.9;white-space:pre-wrap">${escapeText(
+      content
+    )}</div>`;
+  } else {
+    text = content?.text ?? "";
+    html = content?.html ?? "";
+  }
+
+  const message = {
+    from: { name: fromName, address: fromEmail },
+    replyTo,
+    to: toEmail,
+    subject,
+    text,
+    html,
+    // هدرهای اعتمادپذیری/استاندارد
+    headers: {
+      "X-Auto-Response-Suppress": "OOF, AutoReply",
+      ...(options.headers ?? {}),
+    },
+  };
+  // ایمیل‌های غیرتراکنشی (مثل خوش‌آمد) لینک لغو دریافت می‌گیرند؛ جیمیل این را
+  // یکی از معیارهای «ایمیل معتبر» می‌داند.
+  if (options.listUnsubscribe) {
+    // جیمیل وجود این هدر را یکی از معیارهای اعتبار فرستنده‌ی ایمیل انبوه می‌داند
+    message.headers["List-Unsubscribe"] = `<mailto:${replyTo}?subject=unsubscribe>`;
+  }
+
   // سقف سخت‌گیرانه‌ی کل زمان ارسال: بعضی فایروال‌ها/پروکسی‌ها سوکت را بدون
   // هیچ پاسخ SMTP می‌بندند و در آن حالت پرامیس sendMail ممکن است معلق بماند؛
   // نباید اجازه دهیم درخواست ثبت‌نام کاربر بی‌پاسخ هنگ کند.
@@ -78,18 +135,8 @@ export async function sendEmail(toEmail, subject, body) {
     timer.unref?.();
   });
   try {
-    await Promise.race([
-      transporter.sendMail({
-        from: { name: "لیستیا", address: fromEmail },
-        to: toEmail,
-        subject,
-        text: body,
-        html: `<div dir="rtl" style="font-family:Tahoma,sans-serif;line-height:1.9;white-space:pre-wrap">${body
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")}</div>`,
-      }),
-      deadline,
-    ]);
+    const transporter = await getTransport();
+    await Promise.race([transporter.sendMail(message), deadline]);
   } finally {
     clearTimeout(timer);
   }

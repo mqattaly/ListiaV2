@@ -44,6 +44,32 @@ export const DURATION_CHOICES = {
   "365D": { label: "۱ ساله (۳۶۵ روز)", days: 365 },
 };
 
+// ─── پلن‌های قابل فروش ───────────────────────────────────────────────────────
+// تنها این چهار پلن در فهرست خرید نمایش داده می‌شوند (۹۰روزه برای سازگاری با
+// کلیدهای قدیمی در DURATION_CHOICES باقی مانده ولی فروخته نمی‌شود).
+// قیمت‌ها به تومان‌اند؛ با متغیر محیطی قابل بازنویسی (JSON) هستند، مثال:
+//   LICENSE_PRICES='{"30D":99000,"180D":499000,"365D":899000,"LIFE":1899000}'
+const DEFAULT_PLANS = [
+  { code: "30D", label: "یک ماهه", days: 30, price: 99000 },
+  { code: "180D", label: "شش ماهه", days: 180, price: 499000 },
+  { code: "365D", label: "یکساله", days: 365, price: 899000 },
+  { code: "LIFE", label: "مادام‌العمر", days: null, price: 1899000 },
+];
+function loadPlans() {
+  let overrides = {};
+  try {
+    overrides = JSON.parse(process.env.LICENSE_PRICES || "{}");
+  } catch {
+    overrides = {};
+  }
+  return DEFAULT_PLANS.map((p) =>
+    Number.isFinite(Number(overrides[p.code]))
+      ? { ...p, price: Number(overrides[p.code]) }
+      : p
+  );
+}
+export const LICENSE_PLANS = loadPlans();
+
 export function normalizeIdent(ident) {
   if (ident && typeof ident === "object" && "username" in ident) ident = ident.username;
   return String(ident ?? "").trim().toLowerCase();

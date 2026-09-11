@@ -30,10 +30,11 @@ import {
   randomCode,
   parseUtc,
 } from "../lib/utils.js";
-import { adminUsernames } from "../lib/licensing.js";
+import { adminUsernames, LICENSE_PLANS } from "../lib/licensing.js";
 import { getUserLimits, isAdminUser } from "../lib/queries.js";
 import { userPayload } from "../lib/serialize.js";
 import { smtpConfigured, sendEmail } from "../lib/mailer.js";
+import { verificationEmail, welcomeEmail } from "../lib/emailTemplates.js";
 
 const router = Router();
 
@@ -80,11 +81,11 @@ async function sendVerificationCode(user) {
     user.id
   );
   if (smtpConfigured()) {
-    await sendEmail(
-      user.email,
-      "کد تأیید ایمیل لیستیا",
-      `سلام ${user.first_name || user.username} عزیز،\n\nکد تأیید ایمیل شما: ${code}\n\nاین کد ۱۰ دقیقه اعتبار دارد.`
-    );
+    const msg = verificationEmail({
+      code,
+      firstName: user.first_name || user.username,
+    });
+    await sendEmail(user.email, msg.subject, { text: msg.text, html: msg.html });
     return { dev_code: null };
   }
   if (!devCodesAllowed()) {
@@ -94,6 +95,19 @@ async function sendVerificationCode(user) {
   console.log(`\n📩 [لیستیا] کد تأیید برای ${user.email}: ${code}\n`);
   return { dev_code: code };
 }
+
+// ─── GET /api/auth/plans — تعرفه‌ی لایسنس‌ها (عمومی، پیش از ورود هم لازم است) ─
+router.get("/plans", (_req, res) => {
+  res.json({
+    plans: LICENSE_PLANS.map((p) => ({
+      code: p.code,
+      label: p.label,
+      days: p.days,
+      price: p.price,
+    })),
+    support_email: process.env.SMTP_FROM || process.env.SMTP_USERNAME || "",
+  });
+});
 
 // ─── GET /api/auth/me ────────────────────────────────────────────────────────
 router.get("/me", (req, res) => {
@@ -377,6 +391,26 @@ router.post("/verify-email", ah(async (req, res) => {
     user.id
   );
   const fresh = getUserById(user.id);
+
+  // ایمیل خوش‌آمد (معرفی دمو، تعرفه و نحوه‌ی خرید لایسنس). شکست در ارسال،
+  // تأیید موفق را خراب نمی‌کند — فقط در لاگ می‌ماند و کاربر می‌تواند بعداً وارد شود.
+  if (smtpConfigured()) {
+    try {
+      const msg = welcomeEmail({
+        firstName: fresh.first_name || fresh.username,
+        username: fresh.username,
+      });
+      await sendEmail(
+        fresh.email,
+        msg.subject,
+        { text: msg.text, html: msg.html },
+        { listUnsubscribe: true }
+      );
+    } catch (err) {
+      console.error("ارسال ایمیل خوش‌آمد ناموفق بود:", err?.message || err);
+    }
+  }
+
   res.json({
     success: true,
     message: "✓ ایمیل شما تأیید شد. خوش آمدید!",

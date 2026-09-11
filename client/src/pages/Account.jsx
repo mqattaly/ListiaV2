@@ -23,6 +23,7 @@ import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 import { fmtAmount } from "../format.js";
 import { SkeletonRows, BtnSpinner } from "../components/bits.jsx";
+import LicensePlans from "../components/LicensePlans.jsx";
 
 // راهنمای قدم‌به‌قدم ساخت شورتکات در آیفون
 function ShortcutGuide() {
@@ -205,14 +206,28 @@ export default function Account() {
               <p className="hint-text">
                 شناسه‌ی فعال‌سازی شما (برای پشتیبانی): <b className="mono">{limits.user_code}</b>
               </p>
+              <details className="lp-renew">
+                <summary>تمدید یا ارتقای لایسنس (مشاهده‌ی تعرفه)</summary>
+                <div style={{ marginTop: 12 }}>
+                  <LicensePlans userCode={limits.user_code} compact />
+                  <p className="hint-text" style={{ marginTop: 10 }}>
+                    برای تمدید، همان شناسه‌ی فعال‌سازی بالا را پس از پرداخت به پشتیبانی بفرستید.
+                  </p>
+                </div>
+              </details>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <p style={{ fontSize: 13, lineHeight: 2, color: "var(--text-2)" }}>
                 نسخه‌ی آزمایشی: {limits.supplier_count}/{limits.max_suppliers} تأمین‌کننده و{" "}
-                {limits.product_count}/{limits.max_products} محصول. برای نامحدود‌شدن، کلید لایسنس را
-                وارد کنید.
+                {limits.product_count}/{limits.max_products} محصول. برای نامحدود‌شدن، یکی از پلن‌های
+                زیر را تهیه کنید یا اگر کلید لایسنس دارید آن را وارد کنید.
               </p>
+
+              <LicensePlans userCode={limits.user_code} />
+
+              <div style={{ height: 2, background: "var(--border)", borderRadius: 2, margin: "2px 0" }} />
+
               <div className="token-box" style={{ justifyContent: "space-between" }}>
                 <span style={{ color: "var(--text-3)", fontSize: 11.5 }}>شناسه‌ی شما:</span>
                 <b>{limits.user_code}</b>
@@ -229,7 +244,7 @@ export default function Account() {
                 <input
                   className="input mono"
                   style={{ direction: "ltr", textAlign: "left" }}
-                  placeholder="LST-…"
+                  placeholder="کلید لایسنس (LST-…) را اینجا وارد کنید"
                   value={licenseKey}
                   onChange={(e) => setLicenseKey(e.target.value)}
                 />

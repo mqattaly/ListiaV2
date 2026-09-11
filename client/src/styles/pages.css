@@ -711,6 +711,105 @@
   word-break: break-all;
   line-height: 1.7;
 }
+
+/* ─── تعرفه‌ی لایسنس ──────────────────────────────────────────────────────── */
+.license-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+.lp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 15px 14px;
+  text-align: center;
+}
+.lp-card.lp-hot {
+  border-color: var(--accent, #1457c4);
+  background: linear-gradient(180deg, rgba(20, 87, 196, 0.1), var(--surface-2) 60%);
+  box-shadow: 0 0 0 1px var(--accent, #1457c4) inset;
+}
+.lp-tag {
+  position: absolute;
+  top: -11px;
+  right: 50%;
+  transform: translateX(50%);
+  background: var(--accent-grad, linear-gradient(135deg, #1457c4, #1f8fec));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 3px 11px;
+  border-radius: 999px;
+}
+.lp-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-1);
+}
+.lp-days {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.lp-price {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--accent, #1457c4);
+  white-space: nowrap;
+}
+.lp-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.lp-howto {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+.lp-howto-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.lp-howto ol {
+  margin: 0;
+  padding-inline-start: 20px;
+  font-size: 13px;
+  line-height: 2.2;
+  color: var(--text-2);
+}
+.lp-mail {
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--accent, #1457c4);
+  text-decoration: none;
+  font-weight: 700;
+}
+.lp-renew > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent, #1457c4);
+  list-style: none;
+}
+.lp-renew > summary::-webkit-details-marker { display: none; }
+.lp-renew > summary::before { content: "▸ "; }
+.lp-renew[open] > summary::before { content: "▾ "; }
 .section-title {
   font-size: 15.5px;
   font-weight: 800;

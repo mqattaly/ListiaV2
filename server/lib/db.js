@@ -24,6 +24,45 @@ db.exec("PRAGMA wal_autocheckpoint = 1000;");
 db.exec("PRAGMA mmap_size = 268435456;"); // ۲۵۶ مگابایت نگاشت حافظه
 db.exec("PRAGMA cache_size = -20000;"); // کش صفحه‌ها ≈ ۲۰ مگابایت
 
+// ─── قفل بوت چندنمونه‌ای ────────────────────────────────────────────────────
+// وقتی چند ورکرِ cluster هم‌زمان روی یک دیتابیس تازه بالا می‌آیند، نباید هم‌زمان
+// اسکیما/مهاجرت بسازند (خطای قفل یا یونیک). با یک قفل فایلی سبک، فقط یک ورکر
+// مقداردهی می‌کند و بقیه صبر می‌کنند.
+const BOOT_LOCK = `${DB_PATH}.boot.lock`;
+function acquireBootLock() {
+  const start = Date.now();
+  for (;;) {
+    try {
+      const fd = fs.openSync(BOOT_LOCK, "wx");
+      fs.writeSync(fd, String(process.pid));
+      fs.closeSync(fd);
+      return;
+    } catch {
+      // قفل قدیمیِ متعلق به پراسس مرده را بعد از ۶۰ ثانیه می‌شکنیم
+      try {
+        const age = Date.now() - fs.statSync(BOOT_LOCK).mtimeMs;
+        if (age > 60_000) fs.unlinkSync(BOOT_LOCK);
+      } catch {
+        /* قفل همین الان آزاد شد؛ دور بعد دوباره تلاش می‌شود */
+      }
+      if (Date.now() - start > 60_000) {
+        // محافظ نهایی: نباید بوت برای همیشه هنگ کند
+        return;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+function releaseBootLock() {
+  try {
+    fs.unlinkSync(BOOT_LOCK);
+  } catch {
+    /* ignore */
+  }
+}
+acquireBootLock();
+process.on("exit", releaseBootLock);
+
 // ─── اسکیما ─────────────────────────────────────────────────────────────────
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -158,6 +197,8 @@ ${ftsTriggers}
   console.warn("⚠️  FTS5 در این بیلد SQLite در دسترس نیست؛ جستجو با LIKE انجام می‌شود:", err?.message);
   ftsEnabled = false;
 }
+// مقداردهی اسکیما تمام شد؛ اجازه‌ی بوت به بقیه‌ی ورکرها داده می‌شود
+releaseBootLock();
 
 // ─── کش prepared statementها (هر SQL یک‌بار کامپایل می‌شود) ──────────────────
 const stmtCache = new Map();

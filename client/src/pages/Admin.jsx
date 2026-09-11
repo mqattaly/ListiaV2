@@ -338,11 +338,10 @@ function LicenseUserModal({ user, onClose, onSaved }) {
           <div className="field" style={{ flex: 1, minWidth: 150 }}>
             <label>مدت</label>
             <select className="select" value={duration} onChange={(e) => setDuration(e.target.value)}>
+              <option value="30D">یک ماهه</option>
+              <option value="180D">شش ماهه</option>
+              <option value="365D">یکساله</option>
               <option value="LIFE">مادام‌العمر</option>
-              <option value="30D">۱ ماهه</option>
-              <option value="90D">۳ ماهه</option>
-              <option value="180D">۶ ماهه</option>
-              <option value="365D">۱ ساله</option>
             </select>
           </div>
         </div>
@@ -433,11 +432,10 @@ function KeyGeneratorModal({ open, onClose }) {
                 <div className="field" style={{ flex: 1 }}>
                   <label>مدت</label>
                   <select className="select" value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}>
+                    <option value="30D">یک ماهه</option>
+                    <option value="180D">شش ماهه</option>
+                    <option value="365D">یکساله</option>
                     <option value="LIFE">مادام‌العمر</option>
-                    <option value="30D">۱ ماهه</option>
-                    <option value="90D">۳ ماهه</option>
-                    <option value="180D">۶ ماهه</option>
-                    <option value="365D">۱ ساله</option>
                   </select>
                 </div>
               </div>
