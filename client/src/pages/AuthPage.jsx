@@ -156,6 +156,7 @@ export default function AuthPage() {
                   <VerifyPanel
                     form={form}
                     setForm={setForm}
+                    error={error}
                     notice={notice}
                     setNotice={setNotice}
                     setError={setError}
@@ -383,12 +384,14 @@ const toLatinDigits = (s) =>
     return String(i);
   });
 
-function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setError, setNotice }) {
+function VerifyPanel({ form, setForm, error, notice, onDone, devCode, setDevCode, setError, setNotice }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
   const [changeEmail, setChangeEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
-  const [cooldown, setCooldown] = useState(30); // شمارش معکوس اولیه بعد از ثبت‌نام
+  const [cooldown, setCooldown] = useState(60); // شمارش معکوس اولیه بعد از ثبت‌نام (مطابق محدودیت سرور: ۶۰ ثانیه)
+  const [sending, setSending] = useState(false); // ارسال در پس‌زمینه‌ی سرور
+  const [changingEmail, setChangingEmail] = useState(false);
   const refs = useRef([]);
 
   useEffect(() => {
@@ -442,37 +445,65 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
   };
 
   const resend = async () => {
-    if (cooldown > 0 || busy) return;
+    if (cooldown > 0 || busy || sending) return;
     setError("");
-    setBusy(true);
+    setNotice("");
+    setSending(true);
     try {
       const data = await api.post("/api/auth/resend-verification", { email: form.email });
-      setNotice(data.message + " (کد جدید فقط به همین ایمیل ارسال می‌شود)");
+      setNotice((data.message || "کد جدید در حال ارسال است…") + " (فقط به همین ایمیل)");
       setDevCode(data.dev_code || "");
       setCooldown(60);
       setDigits(["", "", "", "", "", ""]);
       setTimeout(() => refs.current[0]?.focus(), 100);
     } catch (err) {
-      setError(err.message);
+      // سرور می‌گوید چند ثانیه دیگر صبر کن؛ شمارش معکوس را با مقدار سرور همگام کن
+      const wait = Number(err.data?.retry_after);
+      if (Number.isFinite(wait) && wait > 0) {
+        setCooldown(wait);
+        setError("");
+      } else {
+        setError(err.message);
+      }
     } finally {
-      setBusy(false);
+      setSending(false);
     }
   };
 
   const changeEmailAddress = async (e) => {
     e.preventDefault();
+    const candidate = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+      setError("ایمیل جدید را درست وارد کنید.");
+      return;
+    }
     setError("");
+    setNotice("");
+    setChangingEmail(true);
     try {
       const data = await api.post("/api/auth/change-verification-email", {
         current_email: form.email,
-        new_email: newEmail,
+        new_email: candidate,
       });
-      setForm((f) => ({ ...f, email: data.email }));
+      setForm((f) => ({ ...f, email: data.email || candidate }));
+      setNewEmail("");
       setChangeEmail(false);
-      setNotice(data.message);
+      setDigits(["", "", "", "", "", ""]);
+      setCooldown(60);
+      setNotice(data.message || "ایمیل تغییر کرد؛ کد جدید در حال ارسال است…");
       setDevCode(data.dev_code || "");
+      setTimeout(() => refs.current[0]?.focus(), 150);
     } catch (err) {
-      setError(err.message);
+      const wait = Number(err.data?.retry_after);
+      if (Number.isFinite(wait) && wait > 0) {
+        setCooldown(wait);
+        setChangeEmail(false);
+        setError("");
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setChangingEmail(false);
     }
   };
 
@@ -490,6 +521,11 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
           حتماً آن پوشه را هم چک کنید و ایمیل ما را «Not Spam» علامت بزنید.
         </span>
       </div>
+      {error && (
+        <motion.div className="auth-alert err" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+          {error}
+        </motion.div>
+      )}
       {notice && <div className="auth-alert ok">{notice}</div>}
       {devCode && (
         <div className="auth-alert info">
@@ -522,12 +558,20 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
             ارسال مجدد تا {String(cooldown).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d])} ثانیه دیگر
           </span>
         ) : (
-          <button onClick={resend} disabled={busy}>
-            ارسال مجدد کد
+          <button onClick={resend} disabled={busy || sending}>
+            {sending ? "در حال ارسال…" : "ارسال مجدد کد"}
           </button>
         )}
         {" · "}
-        <button onClick={() => setChangeEmail((v) => !v)}>تغییر ایمیل</button>
+        <button
+          onClick={() => {
+            setChangeEmail((v) => !v);
+            setError("");
+          }}
+          disabled={sending}
+        >
+          تغییر ایمیل
+        </button>
       </div>
       <AnimatePresence>
         {changeEmail && (
@@ -544,10 +588,12 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="ایمیل جدید"
+              disabled={changingEmail}
               style={{ direction: "ltr" }}
             />
-            <button className="btn" type="submit">
-              <ArrowRight size={16} /> ثبت
+            <button className="btn" type="submit" disabled={changingEmail || !newEmail.trim()}>
+              {changingEmail ? <BtnSpinner /> : <ArrowRight size={16} />}
+              {changingEmail ? "در حال ارسال…" : "ثبت"}
             </button>
           </motion.form>
         )}

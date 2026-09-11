@@ -1,6 +1,6 @@
 // جدول تعرفه و راهنمای خرید لایسنس (داده‌ی پلن‌ها از سرور خوانده می‌شود)
 import React, { useEffect, useState } from "react";
-import { Gem, Copy, BadgeCheck, Infinity as InfinityIcon, CalendarClock } from "lucide-react";
+import { Gem, Copy, BadgeCheck, Infinity as InfinityIcon, CalendarClock, Instagram, Send } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 
@@ -13,7 +13,6 @@ const PLAN_ORDER = ["30D", "180D", "365D", "LIFE"];
 export default function LicensePlans({ userCode, compact = false }) {
   const { toast } = useApp();
   const [plans, setPlans] = useState(null);
-  const [supportEmail, setSupportEmail] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -25,7 +24,6 @@ export default function LicensePlans({ userCode, compact = false }) {
           (a, b) => PLAN_ORDER.indexOf(a.code) - PLAN_ORDER.indexOf(b.code)
         );
         setPlans(sorted);
-        setSupportEmail(d.support_email || "info@listia.ir");
       })
       .catch(() => {});
     return () => {
@@ -39,10 +37,6 @@ export default function LicensePlans({ userCode, compact = false }) {
     if (!userCode) return;
     navigator.clipboard?.writeText(userCode).catch(() => {});
     toast("شناسه‌ی فعال‌سازی کپی شد", "info", 1800);
-  };
-  const copyEmail = () => {
-    navigator.clipboard?.writeText(supportEmail).catch(() => {});
-    toast("ایمیل پشتیبانی کپی شد", "info", 1800);
   };
 
   return (
@@ -73,12 +67,20 @@ export default function LicensePlans({ userCode, compact = false }) {
           </div>
           <ol>
             <li>
-              پلن موردنظر را انتخاب کنید و هزینه را پرداخت کنید، سپس{" "}
-              <b>شناسه‌ی فعال‌سازی</b> زیر را همراه رسید پرداخت به{" "}
-              <a href={`mailto:${supportEmail}`} className="lp-mail" onClick={copyEmail}>
-                {supportEmail}
+              پلن موردنظر خود را از کارت‌های بالا <b>انتخاب کنید</b>.
+            </li>
+            <li>
+              در اینستاگرام به پیج{" "}
+              <a
+                href="https://instagram.com/listia.ir"
+                target="_blank"
+                rel="noreferrer"
+                className="lp-insta-handle"
+              >
+                <Instagram size={14} /> listia.ir
               </a>{" "}
-              بفرستید:
+              <b>دایرکت</b> بدهید و <b>شناسه‌ی فعال‌سازی</b> زیر را هم بفرستید تا برای
+              خرید و پرداخت راهنمایی‌تان کنیم:
             </li>
           </ol>
           <div className="token-box" style={{ justifyContent: "space-between", marginTop: 8 }}>
@@ -88,9 +90,18 @@ export default function LicensePlans({ userCode, compact = false }) {
               <Copy size={13} style={{ cursor: "pointer" }} onClick={copyCode} />
             )}
           </div>
-          <ol start={2} style={{ marginTop: 10 }}>
-            <li>کلید لایسنس (با پیشوند <span className="mono">LST-</span>) برایتان ایمیل می‌شود.</li>
-            <li>کلید را در کادر «فعال‌سازی کلید لایسنس» همین صفحه وارد کنید تا حساب نامحدود شود.</li>
+          <a
+            href="https://instagram.com/listia.ir"
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-primary lp-insta-btn"
+          >
+            <Send size={15} />
+            ارسال دایرکت به <b style={{ marginInlineStart: 4 }}>@listia.ir</b>
+          </a>
+          <ol start={3} style={{ marginTop: 10 }}>
+            <li>پس از پرداخت، کلید لایسنس (با پیشوند <span className="mono">LST-</span>) برایتان ارسال می‌شود.</li>
+            <li>کلید را در کادر «فعال‌سازی با کلید» همین صفحه وارد کنید تا حساب نامحدود شود.</li>
           </ol>
           <p className="hint-text" style={{ marginTop: 10 }}>
             <BadgeCheck size={13} /> با لایسنس: تأمین‌کننده و محصول نامحدود، اشتراک‌گذاری با

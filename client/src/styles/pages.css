@@ -793,12 +793,35 @@
   line-height: 2.2;
   color: var(--text-2);
 }
-.lp-mail {
+.lp-mail,
+.lp-insta-handle {
   direction: ltr;
   unicode-bidi: isolate;
   color: var(--accent, #1457c4);
   text-decoration: none;
-  font-weight: 700;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lp-insta-handle {
+  color: #c13584;
+}
+.lp-insta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(45deg, #f09433, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888);
+  border: none;
+}
+.lp-insta-btn:hover {
+  filter: brightness(1.06);
+  color: #fff;
 }
 .lp-renew > summary {
   cursor: pointer;

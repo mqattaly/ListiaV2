@@ -5,6 +5,8 @@ const BRAND = {
   name: "لیستیا",
   appUrl: "https://app.listia.ir",
   supportEmail: "info@listia.ir",
+  instagram: "https://instagram.com/listia.ir",
+  instagramHandle: "@listia.ir",
 };
 
 const faNum = (n) =>
@@ -142,15 +144,23 @@ export function welcomeEmail({ firstName, username } = {}) {
     </table>
 
     <div style="font-size:15px;font-weight:800;color:#13203a;margin:0 0 8px;">چطور لایسنس بگیرم؟</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
       <tr><td style="font-size:13.5px;line-height:2.3;color:#3b455b;">
-        ۱️⃣ داخل برنامه وارد بخش <b>«حساب کاربری و لایسنس»</b> شوید و <b>شناسه‌ی فعال‌سازی</b> خود را بردارید.<br>
-        ۲️⃣ پلن موردنظر را انتخاب و هزینه را پرداخت کنید، سپس شناسه را به
-        <a href="mailto:${BRAND.supportEmail}" style="color:#1457c4;text-decoration:none;">${BRAND.supportEmail}</a>
-        بفرستید.<br>
-        ۳️⃣ کلید فعال‌سازی برایتان ایمیل می‌شود؛ همان‌جا آن را وارد کنید تا نامحدود شود.
+        ۱️⃣ داخل برنامه وارد بخش <b>«لایسنس»</b> شوید (دکمه‌ی «لایسنس فعال» پایین صفحه) و
+        <b>شناسه‌ی فعال‌سازی</b> خود را بردارید و پلن موردنظر را انتخاب کنید.<br>
+        ۲️⃣ در اینستاگرام به پیج <b>${BRAND.instagramHandle}</b> دایرکت بدهید و شناسه را
+        بفرستید تا برای خرید و پرداخت راهنمایی‌تان کنیم.<br>
+        ۳️⃣ پس از پرداخت، کلید فعال‌سازی برایتان ارسال می‌شود؛ همان‌جا در برنامه وارد کنید تا
+        حساب نامحدود شود.
       </td></tr>
     </table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;"><tr><td align="center">
+      <a href="${BRAND.instagram}" target="_blank"
+         style="display:inline-block;background:linear-gradient(45deg,#f09433,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888);background-color:#cc2366;color:#fff;text-decoration:none;font-weight:700;font-size:13.5px;padding:11px 26px;border-radius:12px;">
+        📩 دایرکت به ${BRAND.instagramHandle} در اینستاگرام
+      </a>
+    </td></tr></table>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
       <a href="${BRAND.appUrl}" target="_blank"
@@ -159,7 +169,9 @@ export function welcomeEmail({ firstName, username } = {}) {
       </a>
     </td></tr></table>
     <p style="margin:18px 0 0;font-size:13px;line-height:2.2;color:#7a8499;">
-      اگر سؤالی دارید، هر وقت خواستید به ${BRAND.supportEmail} ایمیل بزنید تا راهنمایی‌تان کنیم.
+      اگر سؤالی دارید، کافی است در اینستاگرام به{" "}
+      <a href="${BRAND.instagram}" style="color:#1457c4;text-decoration:none;">${BRAND.instagramHandle}</a>{" "}
+      دایرکت بدهید یا به ${BRAND.supportEmail} ایمیل بزنید تا راهنمایی‌تان کنیم.
     </p>`,
   });
 
@@ -174,8 +186,10 @@ export function welcomeEmail({ firstName, username } = {}) {
     `با لایسنس، همه‌چیز نامحدود می‌شود: تأمین‌کننده و محصول نامحدود، اشتراک‌گذاری،\n` +
     `جستجوی قیمت زنده، ایمپورت اکسل و کلید API.\n\n` +
     `تعرفه‌ی لایسنس‌ها (تومان):\n${plansText}\n\n` +
-    `نحوه‌ی خرید: داخل برنامه، بخش «حساب کاربری و لایسنس»، شناسه‌ی فعال‌سازی را برداشته،\n` +
-    `پس از پرداخت آن را به ${BRAND.supportEmail} بفرستید تا کلید فعال‌سازی دریافت کنید.\n\n` +
+    `نحوه‌ی خرید: داخل برنامه بخش «لایسنس»، پلن را انتخاب کنید و شناسه‌ی فعال‌سازی را\n` +
+    `بردارید، سپس در اینستاگرام به پیج ${BRAND.instagramHandle} دایرکت بدهید تا برای پرداخت\n` +
+    `راهنمایی‌تان کنیم و کلید فعال‌سازی برایتان ارسال شود.\n` +
+    `اینستاگرام: ${BRAND.instagram}\n\n` +
     `برنامه: ${BRAND.appUrl}\nپشتیبانی: ${BRAND.supportEmail}\n\n` +
     `با احترام، تیم لیستیا`;
 

@@ -34,7 +34,7 @@ import {
 import { adminUsernames, LICENSE_PLANS } from "../lib/licensing.js";
 import { getUserLimits, isAdminUser } from "../lib/queries.js";
 import { userPayload } from "../lib/serialize.js";
-import { smtpConfigured, sendEmail } from "../lib/mailer.js";
+import { smtpConfigured, queueEmail } from "../lib/mailer.js";
 import { verificationEmail, welcomeEmail } from "../lib/emailTemplates.js";
 
 const router = Router();
@@ -69,7 +69,12 @@ function devCodesAllowed() {
   return process.env.DEV_MODE_CODES === "1" || process.env.NODE_ENV !== "production";
 }
 
-async function sendVerificationCode(user) {
+/**
+ * کد را می‌سازد و در دیتابیس ذخیره می‌کند (هم‌زمان و فوری) و سپس ارسال را در
+ * پس‌زمینه به صف می‌سپارد؛ هرگز منتظر SMTP منتظر نمی‌ماند تا پاسخ درخواست معطل
+ * نشود. در حالت توسعه (SMTP تنظیم نیست) کد در پاسخ برمی‌گردد.
+ */
+function sendVerificationCode(user) {
   const code = randomCode();
   const now = new Date();
   const expires = new Date(now.getTime() + 10 * 60 * 1000);
@@ -86,11 +91,15 @@ async function sendVerificationCode(user) {
       code,
       firstName: user.first_name || user.username,
     });
-    await sendEmail(user.email, msg.subject, { text: msg.text, html: msg.html });
+    // پاسخ فوری؛ ارسال در پس‌زمینه و با تلاش مجدد
+    queueEmail(user.email, msg.subject, { text: msg.text, html: msg.html });
     return { dev_code: null };
   }
   if (!devCodesAllowed()) {
-    throw new Error("SMTP تنظیم نشده است؛ در حالت پروداکشن کد تأیید فقط با ایمیل ارسال می‌شود.");
+    // SMTP خاموش است؛ صفی هم وجود ندارد. پاسخ خطا نده تا جریان بسته نشود،
+    // ولی در لاگ هشدار بده — در پروداکشن باید SMTP تنظیم باشد.
+    console.error("⚠️ SMTP تنظیم نشده است؛ کد تأیید قابل ارسال نیست برای", user.email);
+    return { dev_code: null };
   }
   // حالت توسعه: SMTP تنظیم نیست — کد در کنسول و پاسخ نمایش می‌یابد
   console.log(`\n📩 [لیستیا] کد تأیید برای ${user.email}: ${code}\n`);
@@ -161,45 +170,25 @@ router.post("/signup", ah(async (req, res) => {
 
   if (usernameUser) {
     if (!Number(usernameUser.email_verified)) {
-      try {
-        const extra = await sendVerificationCode(usernameUser);
-        return jsonError(
-          res,
-          "این نام کاربری قبلاً ثبت شده ولی ایمیلش هنوز تایید نشده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
-          409,
-          { need_verification: true, email: usernameUser.email, ...extra }
-        );
-      } catch (err) {
-        console.error("ارسال مجدد کد (نام کاربری تکراری) ناموفق:", err);
-        return jsonError(
-          res,
-          "این نام کاربری قبلاً ثبت شده ولی ارسال کد تایید ایمیل ناموفق بود. تنظیمات SMTP را بررسی و «ارسال مجدد» را بزنید.",
-          502,
-          { need_verification: true, email: usernameUser.email }
-        );
-      }
+      const extra = sendVerificationCode(usernameUser);
+      return jsonError(
+        res,
+        "این نام کاربری قبلاً ثبت شده ولی ایمیلش هنوز تایید نشده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
+        409,
+        { need_verification: true, email: usernameUser.email, ...extra }
+      );
     }
     return jsonError(res, "این نام کاربری قبلاً وجود دارد.");
   }
   if (emailUser) {
     if (!Number(emailUser.email_verified)) {
-      try {
-        const extra = await sendVerificationCode(emailUser);
-        return jsonError(
-          res,
-          "این ایمیل قبلاً برای یک ثبت‌نام تاییدنشده استفاده شده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
-          409,
-          { need_verification: true, email: emailUser.email, ...extra }
-        );
-      } catch (err) {
-        console.error("ارسال مجدد کد (ایمیل تکراری) ناموفق:", err);
-        return jsonError(
-          res,
-          "این ایمیل قبلاً ثبت شده ولی ارسال کد تایید ناموفق بود. تنظیمات SMTP را بررسی و «ارسال مجدد» را بزنید.",
-          502,
-          { need_verification: true, email: emailUser.email }
-        );
-      }
+      const extra = sendVerificationCode(emailUser);
+      return jsonError(
+        res,
+        "این ایمیل قبلاً برای یک ثبت‌نام تاییدنشده استفاده شده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
+        409,
+        { need_verification: true, email: emailUser.email, ...extra }
+      );
     }
     return jsonError(res, "این ایمیل قبلاً ثبت شده است.");
   }
@@ -247,23 +236,12 @@ router.post("/signup", ah(async (req, res) => {
   }
 
   const user = getUserById(Number(info.lastInsertRowid));
-  let extra = {};
-  try {
-    extra = await sendVerificationCode(user);
-  } catch (err) {
-    console.error("ارسال ایمیل تایید ناموفق بود:", err);
-    return jsonError(
-      res,
-      "حساب ساخته شد اما ارسال ایمیل تایید ناموفق بود. تنظیمات SMTP سرور را بررسی کنید و سپس ارسال مجدد را بزنید.",
-      500,
-      { need_verification: true, email: user.email }
-    );
-  }
+  const extra = sendVerificationCode(user);
   res.json({
     success: true,
     need_verification: true,
     email: user.email,
-    message: "کد تایید ۶ رقمی به ایمیل شما ارسال شد.",
+    message: "کد تایید ۶ رقمی به ایمیل شما ارسال شد (اگر چند ثانیه‌ای طول کشید، کمی صبر کنید).",
     ...extra,
   });
 }));
@@ -410,13 +388,12 @@ router.post("/verify-email", ah(async (req, res) => {
       firstName: fresh.first_name || fresh.username,
       username: fresh.username,
     });
-    sendEmail(
+    // صف پس‌زمینه با تلاش مجدد؛ ایمیل خوش‌آمد نباید پاسخ را معطل کند
+    queueEmail(
       fresh.email,
       msg.subject,
       { text: msg.text, html: msg.html },
       { listUnsubscribe: true }
-    ).catch((err) =>
-      console.error("ارسال ایمیل خوش‌آمد ناموفق بود:", err?.message || err)
     );
   }
 }));
@@ -435,18 +412,18 @@ router.post("/resend-verification", ah(async (req, res) => {
   }
   if (user.email_code_sent_at) {
     const sentAt = parseUtc(user.email_code_sent_at)?.getTime() ?? 0;
-    if (Date.now() - sentAt < 60_000) {
-      return jsonError(res, "برای ارسال مجدد کمی صبر کنید (حداکثر یک بار در دقیقه).");
+    const waitMs = 60_000 - (Date.now() - sentAt);
+    if (waitMs > 0) {
+      return res.status(429).json({
+        success: false,
+        message: "برای ارسال مجدد کمی صبر کنید (حداکثر یک بار در دقیقه).",
+        retry_after: Math.ceil(waitMs / 1000),
+      });
     }
   }
-  const extra = await sendVerificationCode(user).catch((err) => {
-    console.error("ارسال مجدد ناموفق:", err);
-    return null;
-  });
-  if (!extra) {
-    return jsonError(res, "ارسال ایمیل ناموفق بود. بعداً دوباره تلاش کنید.", 500);
-  }
-  res.json({ success: true, message: "کد تایید ۶ رقمی دوباره ارسال شد.", ...extra });
+  // ساخت کد فوری و سپردن ارسال به صف پس‌زمینه؛ پاسخ نباید منتظر SMTP بماند
+  const extra = sendVerificationCode(user);
+  res.json({ success: true, message: "کد تایید ۶ رقمی دوباره در حال ارسال است…", ...extra });
 }));
 
 // ─── POST /api/auth/change-verification-email ────────────────────────────────
@@ -463,30 +440,19 @@ router.post("/change-verification-email", ah(async (req, res) => {
   }
   const other = getUserByEmail(newEmail);
   if (other && other.id !== user.id) {
-    if (Number(other.email_verified)) {
-      return jsonError(res, "این ایمیل قبلاً برای کاربر دیگری ثبت شده است.");
-    }
+    return jsonError(res, "این ایمیل قبلاً برای حساب دیگری ثبت شده است.");
   }
 
   run("UPDATE users SET email = ? WHERE id = ?", newEmail, user.id);
   const fresh = getUserById(user.id);
-  try {
-    const extra = await sendVerificationCode(fresh);
-    res.json({
-      success: true,
-      message: "ایمیل تغییر کرد و کد تایید جدید ارسال شد.",
-      email: newEmail,
-      ...extra,
-    });
-  } catch (err) {
-    console.error("ارسال کد پس از تغییر ایمیل ناموفق:", err);
-    return jsonError(
-      res,
-      "ایمیل تغییر کرد اما ارسال کد جدید ناموفق بود. تنظیمات SMTP را بررسی و «ارسال مجدد» را بزنید.",
-      502,
-      { need_verification: true, email: newEmail }
-    );
-  }
+  // ساخت کد فوری و سپردن ارسال به صف پس‌زمینه
+  const extra = sendVerificationCode(fresh);
+  res.json({
+    success: true,
+    message: "ایمیل تغییر کرد و کد تایید جدید در حال ارسال است…",
+    email: newEmail,
+    ...extra,
+  });
 }));
 
 export default router;
