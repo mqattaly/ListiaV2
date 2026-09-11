@@ -1,0 +1,31 @@
+{
+  "scenario": "search",
+  "concurrency": 150,
+  "duration_s": 20,
+  "total_requests": 14997,
+  "total_rps": 749.9,
+  "mb_received": 27.9,
+  "status_codes": {
+    "200": 14997
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.1,
+    "lag_p95_ms": 7.3,
+    "lag_p99_ms": 18.1,
+    "lag_max_ms": 68
+  },
+  "rss_mb": 136,
+  "endpoints": [
+    {
+      "endpoint": "GET /api/search",
+      "count": 14997,
+      "rps": 749.9,
+      "avg_ms": 201,
+      "p50": 183.7,
+      "p95": 285.1,
+      "p99": 480.3,
+      "max": 556
+    }
+  ]
+}

@@ -184,7 +184,7 @@ export function activeCountsBySupplier(userId) {
   return map;
 }
 
-export function dashboardCounters(userId) {
+export function dashboardCounters(userId, suppliersArg = null) {
   const ids = accessibleOwnerIds(userId);
   let activeCount = 0;
   let archivedCount = 0;
@@ -205,12 +205,50 @@ export function dashboardCounters(userId) {
       archivedCount += Number(row.archived_n ?? 0);
     }
   }
-  const suppliers = userSuppliers(userId);
+  const suppliers = suppliersArg ?? userSuppliers(userId);
   return {
     active_count: activeCount,
     archived_count: archivedCount,
     supplier_count: suppliers.length,
     suppliers: bySupplier,
+  };
+}
+
+/** چند محصول فعالِ اخیر با LIMIT در خود SQL (نه واکشی همه و برش در JS). */
+export function recentActiveProducts(userId, limit = 15) {
+  const ids = accessibleOwnerIds(userId);
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => "?").join(",");
+  return all(
+    `SELECT p.*, s.name AS supplier_name
+       FROM products p JOIN suppliers s ON s.id = p.supplier_id
+      WHERE p.owner_id IN (${placeholders}) AND (p.ordered = 0 OR p.ordered IS NULL)
+      ORDER BY p.id DESC LIMIT ?`,
+    ...ids,
+    limit
+  );
+}
+
+/**
+ * کش یک‌جای کاربران صاحب محصول برای رفع کوئری N+1 در productPayload.
+ * یک SELECT برای همه‌ی owner_idهای متمایز می‌زند.
+ */
+export function ownerCache(products = []) {
+  const map = new Map();
+  const ids = new Set();
+  for (const p of products) {
+    if (p && p.owner_id != null) ids.add(Number(p.owner_id));
+  }
+  if (ids.size) {
+    const list = [...ids];
+    const placeholders = list.map(() => "?").join(",");
+    const rows = all(`SELECT * FROM users WHERE id IN (${placeholders})`, ...list);
+    for (const u of rows) map.set(Number(u.id), u);
+  }
+  return {
+    get(id) {
+      return map.get(Number(id));
+    },
   };
 }
 
@@ -275,7 +313,7 @@ export function estimateRowTotal(product, qty = null) {
   return qtyValue * price;
 }
 
-export function productPayload(product, supplierName = null, currentUser = null) {
+export function productPayload(product, supplierName = null, currentUser = null, owners = null) {
   const name = supplierName ?? product.supplier_name ?? "";
   const rowTotal = estimateRowTotal(product);
   const nextRowTotal = estimateRowTotal(product, product.next_qty);
@@ -303,7 +341,7 @@ export function productPayload(product, supplierName = null, currentUser = null)
   };
   if (currentUser && product.owner_id !== currentUser.id) {
     payload.is_shared = true;
-    const owner = getUserById(product.owner_id);
+    const owner = owners ? owners.get(product.owner_id) : getUserById(product.owner_id);
     if (owner) {
       payload.owner_username = owner.username;
       payload.owner_display =
@@ -370,12 +408,13 @@ export function estimateSnapshot(userId, supplierId = null) {
   }
 
   const user = getUserById(userId);
+  const owners = ownerCache(products);
   const items = [];
   const nextItems = [];
   let grandTotal = 0;
   let pricedItems = 0;
   for (const product of products) {
-    const payload = productPayload(product, null, user);
+    const payload = productPayload(product, null, user, owners);
     const remaining = remainingQty(product);
     const held = heldQty(product);
     if (remaining > 0) {

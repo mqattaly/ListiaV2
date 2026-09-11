@@ -14,10 +14,13 @@ import {
   clearSessionCookie,
   clearClientTokenCookie,
   createSessionToken,
+  getSecret,
   requestIP,
   recordAttempt,
   isThrottled,
+  rateCheck,
   clearAttempts,
+  tooMany,
 } from "../lib/auth.js";
 import {
   normalizeEmail,
@@ -34,14 +37,26 @@ import { smtpConfigured, sendEmail } from "../lib/mailer.js";
 
 const router = Router();
 
+// هش آماده برای کاربر ناموجود تا زمان پاسخ، وجودنداشتن حساب را لو ندهد
+const DUMMY_HASH = await hashPassword("dummy-password-enumeration-guard");
+
+// تبدیل رد‌شدن پرامیس مسیر async به میدل‌ور خطای اکسپرس
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 function jsonError(res, message, status = 400, extra = null) {
   return res.status(status).json({ success: false, message, ...(extra ?? {}) });
 }
 
+function sessionFor(res, user) {
+  const epoch = Number(user.session_epoch || 0);
+  setSessionCookie(res, user.id, epoch);
+  return createSessionToken(user.id, epoch);
+}
+
 function hashCode(code) {
-  // کد یک‌بارمصرف است؛ هشِ سبک‌تر از رمز کافی است
+  // کد یک‌بارمصرف است؛ با همان راز اصلی نشست امضا می‌شود
   return crypto
-    .createHmac("sha256", `listia-code:${process.env.SECRET_KEY || "dev"}`)
+    .createHmac("sha256", getSecret())
     .update(String(code))
     .digest("hex");
 }
@@ -91,12 +106,11 @@ router.get("/me", (req, res) => {
 });
 
 // ─── POST /api/auth/signup ───────────────────────────────────────────────────
-router.post("/signup", async (req, res) => {
+router.post("/signup", ah(async (req, res) => {
   const ip = requestIP(req);
-  if (isThrottled("signup", ip, 10)) {
-    return jsonError(res, "ثبت‌نام‌های پشت سر هم زیاد است. چند دقیقه بعد دوباره امتحان کنید.");
+  if (!rateCheck("signup", ip, 10)) {
+    return tooMany(res, "ثبت‌نام‌های پشت سر هم زیاد است. چند دقیقه بعد دوباره امتحان کنید.");
   }
-  recordAttempt("signup", ip);
 
   const body = req.body ?? {};
   const username = String(body.username ?? "").trim().slice(0, 100);
@@ -163,18 +177,20 @@ router.post("/signup", async (req, res) => {
     const ok =
       setupToken &&
       givenToken &&
+      givenToken.length === setupToken.length &&
       crypto.timingSafeEqual(Buffer.from(givenToken), Buffer.from(setupToken));
     if (!ok) {
       return jsonError(res, "این نام کاربری رزرو شده است و قابل ثبت‌نام نیست.");
     }
   }
 
+  const passwordHash = await hashPassword(password);
   const info = run(
     `INSERT INTO users (username, password_hash, first_name, last_name, phone, email,
                         email_verified, is_licensed, license_type, is_admin)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     username,
-    hashPassword(password),
+    passwordHash,
     firstName,
     lastName,
     phone,
@@ -187,12 +203,11 @@ router.post("/signup", async (req, res) => {
 
   if (isAdminAccount) {
     const user = getUserById(Number(info.lastInsertRowid));
-    setSessionCookie(res, user.id);
     return res.json({
       success: true,
       user: userPayload(user),
       limits: getUserLimits(user),
-      session_token: createSessionToken(user.id),
+      session_token: sessionFor(res, user),
     });
   }
 
@@ -216,21 +231,36 @@ router.post("/signup", async (req, res) => {
     message: "کد تایید ۶ رقمی به ایمیل شما ارسال شد.",
     ...extra,
   });
-});
+}));
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
-router.post("/login", (req, res) => {
+router.post("/login", ah(async (req, res) => {
   const ip = requestIP(req);
-  if (isThrottled("login", ip)) {
-    return jsonError(res, "تلاش‌های ورود زیاد است. چند دقیقه بعد دوباره امتحان کنید.");
-  }
   const body = req.body ?? {};
   const username = String(body.username ?? "").trim().slice(0, 100);
   const password = String(body.password ?? "");
-  const user = getUserByUsername(username);
 
-  if (user && verifyPasswordHash(user.password_hash, password)) {
+  // محدودیت هم بر اساس IP و هم بر اساس نام کاربری (جلوگیری از طوفان رمز روی یک حساب)
+  const ipCount = isThrottled("login", ip);
+  const userKeyCount = username ? isThrottled("login", `user:${username.toLowerCase()}`) : 0;
+  if ((ipCount && ipCount >= 10) || (userKeyCount && userKeyCount >= 6)) {
+    return tooMany(res, "تلاش‌های ورود زیاد است. چند دقیقه بعد دوباره امتحان کنید.");
+  }
+
+  const user = getUserByUsername(username);
+  const ok = user ? await verifyPasswordHash(user.password_hash, password) : false;
+  // برای جلوگیری از تشخیص اینکه کدام نام کاربری وجود دارد، برای کاربر ناموجود هم
+  // هزینه‌ی یک هش صرف می‌شود (و پاسخ یکسان برمی‌گردد)
+  if (!user) {
+    await verifyPasswordHash(DUMMY_HASH, password);
+    recordAttempt("login", ip);
+    if (username) recordAttempt("login", `user:${username.toLowerCase()}`);
+    return jsonError(res, "نام کاربری یا رمز عبور اشتباه است.");
+  }
+
+  if (ok) {
     clearAttempts("login", ip);
+    clearAttempts("login", `user:${username.toLowerCase()}`);
     // نام‌های رزروشده مدیر در اولین ورود ارتقا می‌یابند (رفتار نسخه‌ی اصلی)
     if (adminUsernames().has(user.username.toLowerCase())) {
       run(
@@ -251,19 +281,19 @@ router.post("/login", (req, res) => {
         message: "ایمیل شما هنوز تأیید نشده است. کد تأیید ارسال‌شده را وارد کنید.",
       });
     }
-    setSessionCookie(res, user.id);
     return res.json({
       success: true,
       user: userPayload(user),
       limits: getUserLimits(user),
       message: "خوش آمدید 👋",
-      session_token: createSessionToken(user.id),
+      session_token: sessionFor(res, user),
     });
   }
 
   recordAttempt("login", ip);
+  recordAttempt("login", `user:${username.toLowerCase()}`);
   return jsonError(res, "نام کاربری یا رمز عبور اشتباه است.");
-});
+}));
 
 // ─── POST /api/auth/logout ───────────────────────────────────────────────────
 router.post("/logout", (req, res) => {
@@ -273,27 +303,53 @@ router.post("/logout", (req, res) => {
 });
 
 // ─── POST /api/auth/verify-email ─────────────────────────────────────────────
-router.post("/verify-email", async (req, res) => {
+router.post("/verify-email", ah(async (req, res) => {
   const body = req.body ?? {};
   const code = String(body.code ?? "").trim();
   const email = normalizeEmail(body.email ?? "");
+  const ip = requestIP(req);
 
-  let user = null;
-  if (email) user = getUserByEmail(email);
+  // محدودیت بروت‌فورس کد: حداکثر ۱۰ تلاش در ۱۰ دقیقه برای هر ایمیل و هر IP.
+  // عمداً پیش از بررسی وجود حساب اعمال می‌شود تا با ایمیل ناموجود نشود سطل را
+  // دور زد یا وجود حساب را با سرعت پاسخ تشخیص داد.
+  const windowMs = 10 * 60 * 1000;
+  if (
+    (email && !rateCheck("verify", `email:${email}`, 10, windowMs)) ||
+    !rateCheck(`verify:${email || "n/a"}`, ip, 25, windowMs)
+  ) {
+    return tooMany(
+      res,
+      "تعداد تلاش‌های کد تأیید زیاد است. دوباره کد بفرستید و کد جدید را وارد کنید."
+    );
+  }
+
+  const user = email ? getUserByEmail(email) : null;
   if (!user) return jsonError(res, "حساب مربوط به این ایمیل پیدا نشد.", 404);
   if (Number(user.email_verified)) {
     return jsonError(res, "این ایمیل قبلاً تأیید شده است. وارد شوید.");
   }
+
   if (!user.email_code_hash || !user.email_code_expires_at) {
     return jsonError(res, "کدی برای این حساب ارسال نشده است. ارسال مجدد را بزنید.");
   }
   if ((parseUtc(user.email_code_expires_at)?.getTime() ?? 0) < Date.now()) {
     return jsonError(res, "کد تأیید منقضی شده است. ارسال مجدد را بزنید.");
   }
-  if (!code || hashCode(code) !== user.email_code_hash) {
+  if (!code) {
+    return jsonError(res, "کد تأیید درست نیست.");
+  }
+  // مقایسه‌ی زمان‌ثابت هش‌ها
+  const givenHash = Buffer.from(hashCode(code), "hex");
+  const storedHash = Buffer.from(user.email_code_hash || "", "hex");
+  const codeOk =
+    givenHash.length === storedHash.length &&
+    crypto.timingSafeEqual(givenHash, storedHash);
+  if (!codeOk) {
     return jsonError(res, "کد تأیید درست نیست.");
   }
 
+  clearAttempts("verify", `email:${email}`);
+  clearAttempts(`verify:${email}`, ip);
   run(
     `UPDATE users SET email_verified = 1, email_code_hash = NULL,
                       email_code_sent_at = NULL, email_code_expires_at = NULL
@@ -301,23 +357,26 @@ router.post("/verify-email", async (req, res) => {
     user.id
   );
   const fresh = getUserById(user.id);
-  setSessionCookie(res, fresh.id);
   res.json({
     success: true,
     message: "✓ ایمیل شما تأیید شد. خوش آمدید!",
     user: userPayload(fresh),
     limits: getUserLimits(fresh),
-    session_token: createSessionToken(fresh.id),
+    session_token: sessionFor(res, fresh),
   });
-});
+}));
 
 // ─── POST /api/auth/resend-verification ──────────────────────────────────────
-router.post("/resend-verification", async (req, res) => {
+router.post("/resend-verification", ah(async (req, res) => {
   const email = normalizeEmail((req.body ?? {}).email ?? "");
   const user = email ? getUserByEmail(email) : null;
   if (!user) return jsonError(res, "حساب مربوط به این ایمیل پیدا نشد.", 404);
   if (Number(user.email_verified)) {
     return jsonError(res, "این ایمیل قبلاً تأیید شده است.");
+  }
+  const ip = requestIP(req);
+  if (!rateCheck("resend", ip, 8, 15 * 60 * 1000)) {
+    return tooMany(res, "تعداد ارسال مجدد زیاد است. کمی بعد دوباره تلاش کنید.");
   }
   if (user.email_code_sent_at) {
     const sentAt = parseUtc(user.email_code_sent_at)?.getTime() ?? 0;
@@ -333,10 +392,10 @@ router.post("/resend-verification", async (req, res) => {
     return jsonError(res, "ارسال ایمیل ناموفق بود. بعداً دوباره تلاش کنید.", 500);
   }
   res.json({ success: true, message: "کد تایید ۶ رقمی دوباره ارسال شد.", ...extra });
-});
+}));
 
 // ─── POST /api/auth/change-verification-email ────────────────────────────────
-router.post("/change-verification-email", async (req, res) => {
+router.post("/change-verification-email", ah(async (req, res) => {
   const body = req.body ?? {};
   const currentEmail = normalizeEmail(body.current_email ?? "");
   const newEmail = normalizeEmail(body.new_email ?? "");
@@ -363,6 +422,6 @@ router.post("/change-verification-email", async (req, res) => {
     email: newEmail,
     ...extra,
   });
-});
+}));
 
 export default router;

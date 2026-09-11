@@ -1,11 +1,15 @@
 // ─── مسیرهای اصلی اپ: داشبورد، تأمین‌کننده‌ها، محصولات، جستجو، برآورد ─────────
 import { Router } from "express";
 import multer from "multer";
+import os from "node:os";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   all,
   get,
   run,
   getUserById,
+  ftsEnabled,
 } from "../lib/db.js";
 import {
   UNIT_TYPES,
@@ -25,6 +29,8 @@ import {
   activeCountsBySupplier,
   dashboardCounters,
   recentProductNames,
+  recentActiveProducts,
+  ownerCache,
   getUserLimits,
   ownedSupplier,
   ownedProduct,
@@ -43,9 +49,16 @@ import { priceSearch } from "../lib/priceSearch.js";
 const router = Router();
 
 const upload = multer({
-  storage: multer.memoryStorage(),
+  // فایل روی دیسک موقت می‌نشیند نه RAM (جلوگیری از اشغال صدها مگابایت با آپلود هم‌زمان)
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (_req, _file, cb) =>
+      cb(null, `listia-import-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`),
+  }),
   limits: { fileSize: 8 * 1024 * 1024 },
 });
+
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function jsonError(res, message, status = 400, extra = null) {
   return res.status(status).json({ success: false, message, ...(extra ?? {}) });
@@ -66,10 +79,9 @@ function requireLicenseForProduct(res, limits) {
 router.get("/dashboard", (req, res) => {
   const userId = req.user.id;
   const suppliers = userSuppliers(userId);
-  const counters = dashboardCounters(userId);
-  const recent = userProducts(userId, { ordered: false })
-    .sort((a, b) => b.id - a.id)
-    .slice(0, 15);
+  const counters = dashboardCounters(userId, suppliers);
+  const recent = recentActiveProducts(userId, 15);
+  const owners = ownerCache(recent);
 
   res.json({
     success: true,
@@ -85,15 +97,15 @@ router.get("/dashboard", (req, res) => {
     active_count: counters.active_count,
     archived_count: counters.archived_count,
     supplier_count: counters.supplier_count,
-    recent: recent.map((p) => productPayload(p, null, req.user)),
+    recent: recent.map((p) => productPayload(p, null, req.user, owners)),
     limits: getUserLimits(req.user),
     today_label: shamsiLabel(todayISO()),
   });
 });
 
 router.get("/dashboard/stats", (req, res) => {
-  const counters = dashboardCounters(req.user.id);
   const suppliers = userSuppliers(req.user.id);
+  const counters = dashboardCounters(req.user.id, suppliers);
   res.json({
     success: true,
     active_count: counters.active_count,
@@ -166,12 +178,13 @@ router.get("/suppliers/:id", (req, res) => {
     supplier.id
   );
 
+  const owners = ownerCache([...active, ...archived]);
   const groups = {};
   for (const item of archived) {
     const isoKey = item.ordered_date ? String(item.ordered_date).slice(0, 10) : "unknown";
     const label = item.ordered_date ? shamsiLabel(item.ordered_date) : "بدون تاریخ";
     if (!groups[isoKey]) groups[isoKey] = { label, products: [] };
-    groups[isoKey].products.push(productPayload(item, supplier.name, req.user));
+    groups[isoKey].products.push(productPayload(item, supplier.name, req.user, owners));
   }
 
   const suppliers = userSuppliers(req.user.id).map((s) => ({ id: s.id, name: s.name }));
@@ -185,7 +198,7 @@ router.get("/suppliers/:id", (req, res) => {
       owner_name: (supplier.owner_name ?? "").trim(),
     },
     suppliers,
-    products: active.map((p) => productPayload(p, supplier.name, req.user)),
+    products: active.map((p) => productPayload(p, supplier.name, req.user, owners)),
     groups,
     today_iso: todayISO(),
     today_label: shamsiLabel(todayISO()),
@@ -229,9 +242,10 @@ router.get("/purchases", (req, res) => {
     name: s.name,
     owner_id: s.owner_id,
   }));
+  const owners = ownerCache(products);
   res.json({
     success: true,
-    products: products.map((p) => productPayload(p, null, req.user)),
+    products: products.map((p) => productPayload(p, null, req.user, owners)),
     suppliers,
     limits: getUserLimits(req.user),
     product_names: recentProductNames(req.user.id),
@@ -451,15 +465,67 @@ router.get("/search", (req, res) => {
   const ph = ids.map(() => "?").join(",");
   const pattern = `%${query}%`;
 
-  const matches = all(
+  // جستجوی محصولات: FTS5 (ایندکس کامل‌متن) در صورت دسترس، وگرنه LIKE
+  let matches = [];
+  let usedFts = false;
+  const matchTokens = query.match(/[؀-ۿݐ-ݿA-Za-z0-9‌]+/g) || query.match(/[\u0600-\u06FF\u0750-\u077F\w]+/g);
+  if (ftsEnabled && matchTokens?.length) {
+    try {
+      // فقط حروف/اعداد مجازند (جلوگیری از خطای نحوی MATCH)؛ فیلر مالک هم
+      // داخل MATCH می‌رود تا FTS همه‌ی کاربران را نپوید.
+      const safeTokens = matchTokens
+        .slice(0, 8)
+        .map((t) => `"${t.replace(/["*]/g, "")}"*`);
+      const textExpr = safeTokens.join(" ");
+      const ownerExpr = ids.map((id) => `oid:${Number(id)}`).join(" OR ");
+      const matchExpr = `${textExpr} AND (${ownerExpr})`;
+      matches = all(
+        `SELECT p.*, s.name AS supplier_name FROM products_fts f
+           JOIN products p ON p.id = f.rowid
+           JOIN suppliers s ON s.id = p.supplier_id
+          WHERE products_fts MATCH ?
+          ORDER BY p.ordered ASC, p.id DESC LIMIT 50`,
+        matchExpr
+      );
+      usedFts = true;
+    } catch {
+      matches = [];
+    }
+  }
+  if (!usedFts) {
+    matches = all(
+      `SELECT p.*, s.name AS supplier_name FROM products p
+         JOIN suppliers s ON s.id = p.supplier_id
+        WHERE p.owner_id IN (${ph}) AND lower(p.product_name) LIKE lower(?)
+        ORDER BY p.ordered ASC, p.id DESC LIMIT 50`,
+      ...ids,
+      pattern
+    );
+  }
+
+  // محصولاتِ تأمین‌کنندگانی که نام خود تأمین‌کننده با جستجو می‌خورد
+  const bySupplierName = all(
     `SELECT p.*, s.name AS supplier_name FROM products p
        JOIN suppliers s ON s.id = p.supplier_id
-      WHERE p.owner_id IN (${ph}) AND (lower(p.product_name) LIKE lower(?) OR lower(s.name) LIKE lower(?))
+      WHERE p.owner_id IN (${ph}) AND p.supplier_id IN
+            (SELECT id FROM suppliers WHERE owner_id IN (${ph}) AND lower(name) LIKE lower(?))
       ORDER BY p.ordered ASC, p.id DESC LIMIT 50`,
     ...ids,
-    pattern,
+    ...ids,
     pattern
   );
+
+  const seenIds = new Set(matches.map((m) => m.id));
+  for (const row of bySupplierName) {
+    if (!seenIds.has(row.id)) {
+      matches.push(row);
+      seenIds.add(row.id);
+    }
+  }
+  matches.sort(
+    (a, b) => Number(a.ordered) - Number(b.ordered) || b.id - a.id
+  );
+  matches = matches.slice(0, 50);
 
   const matchingSuppliers = all(
     `SELECT * FROM suppliers WHERE owner_id IN (${ph}) AND lower(name) LIKE lower(?)
@@ -468,9 +534,10 @@ router.get("/search", (req, res) => {
     pattern
   );
   const counts = activeCountsBySupplier(req.user.id);
+  const owners = ownerCache(matches);
 
   res.json({
-    results: matches.map((m) => productPayload(m, null, req.user)),
+    results: matches.map((m) => productPayload(m, null, req.user, owners)),
     suppliers: matchingSuppliers.map((s) => ({
       id: s.id,
       name: s.name,
@@ -611,7 +678,7 @@ router.post("/estimate/trim-to-budget", (req, res) => {
   res.json(out);
 });
 
-router.get("/estimate/search", async (req, res) => {
+router.get("/estimate/search", ah(async (req, res) => {
   const query = String(req.query.q ?? req.query.query ?? "").trim();
   const site = String(req.query.url ?? req.query.site ?? "").trim();
   const source = String(req.query.source ?? "").trim();
@@ -622,24 +689,32 @@ router.get("/estimate/search", async (req, res) => {
   } catch (err) {
     return jsonError(res, err.message);
   }
-});
+}));
 
 // ─── ایمپورت ────────────────────────────────────────────────────────────────
-router.post("/import", upload.single("file"), (req, res) => {
-  if (!req.file || !req.file.originalname) {
-    return jsonError(res, "فایلی انتخاب نشده است.");
-  }
-  const filename = String(req.file.originalname).toLowerCase();
-  if (!/\.(csv|xlsx|xlsm|xls)$/.test(filename)) {
-    return jsonError(res, "فقط فایل CSV یا Excel مجاز است.");
-  }
-  try {
-    const result = importRows(req.user, req.file.buffer, filename);
-    res.json({ ...result, limits: getUserLimits(req.user) });
-  } catch (err) {
-    return jsonError(res, `خطا در خواندن فایل. قالب را بررسی کنید. (${err.message})`);
-  }
-});
+router.post(
+  "/import",
+  upload.single("file"),
+  ah(async (req, res) => {
+    if (!req.file || !req.file.originalname) {
+      return jsonError(res, "فایلی انتخاب نشده است.");
+    }
+    const filename = String(req.file.originalname).toLowerCase();
+    if (!/\.(csv|xlsx|xlsm|xls)$/.test(filename)) {
+      await fs.unlink(req.file.path).catch(() => {});
+      return jsonError(res, "فقط فایل CSV یا Excel مجاز است.");
+    }
+    try {
+      const buffer = await fs.readFile(req.file.path);
+      const result = await importRows(req.user, buffer, filename);
+      res.json({ ...result, limits: getUserLimits(req.user) });
+    } catch (err) {
+      return jsonError(res, `خطا در خواندن فایل. قالب را بررسی کنید. (${err.message})`);
+    } finally {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
+  })
+);
 
 router.get("/units", (_req, res) => {
   res.json({ success: true, units: UNIT_TYPES });

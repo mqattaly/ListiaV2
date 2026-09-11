@@ -1,0 +1,31 @@
+{
+  "scenario": "login",
+  "concurrency": 50,
+  "duration_s": 20,
+  "total_requests": 450,
+  "total_rps": 22.5,
+  "mb_received": 0.4,
+  "status_codes": {
+    "200": 450
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.2,
+    "lag_p95_ms": 3.1,
+    "lag_p99_ms": 14.7,
+    "lag_max_ms": 182
+  },
+  "rss_mb": 102,
+  "endpoints": [
+    {
+      "endpoint": "POST /api/auth/login (scrypt)",
+      "count": 450,
+      "rps": 22.5,
+      "avg_ms": 2385.6,
+      "p50": 2425.9,
+      "p95": 2566.4,
+      "p99": 2616.2,
+      "max": 2693
+    }
+  ]
+}

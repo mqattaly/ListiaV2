@@ -1,0 +1,31 @@
+{
+  "scenario": "dashboard",
+  "concurrency": 150,
+  "duration_s": 20,
+  "total_requests": 9806,
+  "total_rps": 490.3,
+  "mb_received": 94.4,
+  "status_codes": {
+    "200": 9806
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.2,
+    "lag_p95_ms": 7.2,
+    "lag_p99_ms": 14.8,
+    "lag_max_ms": 36
+  },
+  "rss_mb": 133,
+  "endpoints": [
+    {
+      "endpoint": "GET /api/dashboard",
+      "count": 9806,
+      "rps": 490.3,
+      "avg_ms": 308,
+      "p50": 252.6,
+      "p95": 544,
+      "p99": 576.6,
+      "max": 710
+    }
+  ]
+}

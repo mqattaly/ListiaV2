@@ -3,7 +3,7 @@ import { get, run } from "./lib/db.js";
 import { hashPassword } from "./lib/auth.js";
 import { generateKey } from "./lib/licensing.js";
 
-function upsertUser({ username, password, first, last, phone, email, admin = false, licensed = false, licenseType = "free", budget = "" }) {
+async function upsertUser({ username, password, first, last, phone, email, admin = false, licensed = false, licenseType = "free", budget = "" }) {
   const existing = get("SELECT * FROM users WHERE username = ?", username);
   if (existing) return existing;
   const info = run(
@@ -11,7 +11,7 @@ function upsertUser({ username, password, first, last, phone, email, admin = fal
                         email_verified, is_licensed, license_type, is_admin, estimate_budget, api_token)
      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     username,
-    hashPassword(password),
+    await hashPassword(password),
     first,
     last,
     phone,
@@ -58,8 +58,9 @@ function addProduct(ownerId, supplierId, name, quantity, unit, description = "",
   return Number(info.lastInsertRowid);
 }
 
-// ─── مدیر ────────────────────────────────────────────────────────────────────
-const admin = upsertUser({
+// ─── مدیر و کاربر نمونه ──────────────────────────────────────────────────────
+const runSeed = async () => {
+const admin = await upsertUser({
   username: "admin",
   password: process.env.ADMIN_PASSWORD || "admin123456",
   first: "مدیر",
@@ -72,7 +73,7 @@ const admin = upsertUser({
 });
 
 // ─── کاربر دمو (با لایسنس مادام‌العمر و داده‌ی نمونه) ─────────────────────────
-const demo = upsertUser({
+const demo = await upsertUser({
   username: "demo",
   password: "demo123456",
   first: "کاربر",
@@ -107,3 +108,9 @@ run("UPDATE products SET ordered = 1, ordered_date = date('now') WHERE id = ?", 
 console.log("✓ داده‌ی نمونه آماده شد:");
 console.log("  👑 مدیر:        admin / admin123456");
 console.log("  👤 کاربر دمو:   demo  / demo123456 (لایسنس PRO مادام‌العمر + داده‌ی نمونه)");
+};
+
+runSeed().catch((err) => {
+  console.error("خطای ساخت داده‌ی نمونه:", err);
+  process.exit(1);
+});

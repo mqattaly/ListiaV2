@@ -10,7 +10,11 @@ import {
 import {
   hashPassword,
   verifyPasswordHash,
+  createSessionToken,
+  setSessionCookie,
 } from "../lib/auth.js";
+
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 import {
   cleanPersonName,
   shamsiLabel,
@@ -114,14 +118,14 @@ router.post("/profile", (req, res) => {
 });
 
 // ─── POST /api/account/password ──────────────────────────────────────────────
-router.post("/password", (req, res) => {
+router.post("/password", ah(async (req, res) => {
   const body = req.body ?? {};
   const currentPassword = String(body.current_password ?? "");
   const newPassword = String(body.new_password ?? "");
   const confirmPassword = String(body.confirm_password ?? "");
   const user = getUserById(req.user.id);
 
-  if (!verifyPasswordHash(user.password_hash, currentPassword)) {
+  if (!(await verifyPasswordHash(user.password_hash, currentPassword))) {
     return jsonError(res, "رمز عبور فعلی درست نیست.");
   }
   if (newPassword.length < 6) {
@@ -133,9 +137,22 @@ router.post("/password", (req, res) => {
   if (newPassword === currentPassword) {
     return jsonError(res, "رمز جدید با رمز فعلی فرقی ندارد.");
   }
-  run("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(newPassword), user.id);
-  res.json({ success: true, message: "رمز عبور عوض شد." });
-});
+  const newHash = await hashPassword(newPassword);
+  // تغییر رمز، نسل نشست را جلو می‌برد تا همه‌ی نشست‌های دیگر (روی دستگاه‌های دیگر) باطل شوند
+  run(
+    "UPDATE users SET password_hash = ?, session_epoch = session_epoch + 1 WHERE id = ?",
+    newHash,
+    user.id
+  );
+  const fresh = getUserById(user.id);
+  const epoch = Number(fresh.session_epoch || 0);
+  setSessionCookie(res, fresh.id, epoch);
+  res.json({
+    success: true,
+    message: "رمز عبور عوض شد و از دستگاه‌های دیگر خارج شدید.",
+    session_token: createSessionToken(fresh.id, epoch),
+  });
+}));
 
 // ─── POST /api/account/token — کلید شخصی برای ثبت از بیرون اپ ────────────────
 router.post("/token", (req, res) => {

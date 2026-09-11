@@ -3,8 +3,35 @@
 import crypto from "node:crypto";
 import os from "node:os";
 
-export const LICENSE_SECRET =
-  process.env.LICENSE_SECRET || "LISTIA-GHATTALI-LICENSE-SECURE-KEY-2026";
+// ─── مدیریت راز لایسنس ───────────────────────────────────────────────────────
+// رازِ صدور کلید فقط از محیط خوانده می‌شود و هیچ مقدار پیش‌فرضِ داخل مخزنی
+// برای تولید وجود ندارد. کلیدهای صادرشده‌ی قبلی را می‌توان با فهرست
+// LICENSE_SECRET_LEGACY (با کاما جدا کنید) همچنان «تأیید» کرد ولی کلید جدید
+// هرگز با راز قدیمی ساخته نمی‌شود.
+const DEV_FALLBACK_SECRET = "LISTIA-GHATTALI-LICENSE-SECURE-KEY-2026";
+
+const primarySecret = (process.env.LICENSE_SECRET || "").trim();
+if (!primarySecret && process.env.NODE_ENV === "production") {
+  throw new Error(
+    "LICENSE_SECRET در محیط پروداکشن ست نشده است. یک راز تصادفی قوی در LICENSE_SECRET تنظیم کنید " +
+      "(در صورت نیاز به تأیید کلیدهای قدیمی، راز قبلی را در LICENSE_SECRET_LEGACY بگذارید)."
+  );
+}
+if (!primarySecret) {
+  console.warn(
+    "⚠️  LICENSE_SECRET ست نشده است؛ فقط برای توسعه از راز پیش‌فرض استفاده می‌شود. در تولید حتماً ست کنید."
+  );
+}
+
+export const LICENSE_SECRET = primarySecret || DEV_FALLBACK_SECRET;
+const LEGACY_SECRETS = (process.env.LICENSE_SECRET_LEGACY || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+// راز قدیمیِ داخل مخزن فقط در حالت توسعه برای سازگاری در فهرست تأیید می‌ماند
+if (!primarySecret && !LEGACY_SECRETS.includes(DEV_FALLBACK_SECRET)) {
+  LEGACY_SECRETS.push(DEV_FALLBACK_SECRET);
+}
 
 export const FREE_MAX_SUPPLIERS = 1;
 export const FREE_MAX_PRODUCTS = 5;
@@ -64,9 +91,9 @@ export function getUserCode(userOrUsername) {
   return `LST-${digest.slice(0, 4)}-${digest.slice(4, 8)}`;
 }
 
-function hmacHex(message) {
+function hmacHex(message, secret = LICENSE_SECRET) {
   return crypto
-    .createHmac("sha256", LICENSE_SECRET)
+    .createHmac("sha256", secret)
     .update(message, "utf8")
     .digest("hex")
     .toUpperCase();
@@ -109,45 +136,61 @@ export function verifyKey(userOrIdent, key) {
   const ident = normalizeIdent(userOrIdent);
   const userCode = getUserCode(ident);
 
-  // ۱. کلیدهای دارای برچسب مدت: LST-<PERIOD>-XXXX-XXXX-XXXX
-  const parts = cleanKey.split("-");
-  if (parts.length >= 4 && parts[0] === "LST") {
-    const [periodCode, days, label] = normalizeDuration(parts[1]);
+  // ابتدا راز فعلی، سپس رازهای قدیمی (دوره‌ی گذر از چرخش راز) امتحان می‌شوند
+  const secrets = [LICENSE_SECRET, ...LEGACY_SECRETS];
+  const invalid = [false, null, null, "کلید لایسنس وارد شده نامعتبر است یا برای این حساب صادر نشده است."];
+
+  for (const secret of secrets) {
+    // getUserCode به خودش از راز برای ساخت کد کاربر استفاده می‌کند؛ چون این کد
+    // در متن کلید نیست و فقط شناسه‌ی نمایشی است، با راز فعلی ساخته می‌شود.
+    const keyFor = (candidate, tier, periodCode) => {
+      const code = getUserCode(candidate);
+      const sig = hmacHex(`LISTIA:${candidate}:${code}:${tier}:${periodCode}`, secret);
+      return `LST-${periodCode}-${sig.slice(0, 4)}-${sig.slice(4, 8)}-${sig.slice(8, 12)}`;
+    };
+    const masterFor = (tier, periodCode) => {
+      const sig = hmacHex(`LISTIA:MASTER_KEY_UNIVERSAL:${tier}:${periodCode}`, secret);
+      return `LST-${periodCode}-${sig.slice(0, 4)}-${sig.slice(4, 8)}-${sig.slice(8, 12)}`;
+    };
+
+    // ۱. کلیدهای دارای برچسب مدت: LST-<PERIOD>-XXXX-XXXX-XXXX
+    const parts = cleanKey.split("-");
+    if (parts.length >= 4 && parts[0] === "LST") {
+      const [periodCode, days, label] = normalizeDuration(parts[1]);
+      for (const candidate of [ident, userCode]) {
+        for (const tier of ["PRO", "UNLIMITED", "ENTERPRISE"]) {
+          if (timingSafeEqual(cleanKey, keyFor(candidate, tier, periodCode))) {
+            return [true, tier, days, `لایسنس ${label} با موفقیت فعال شد.`];
+          }
+        }
+      }
+      for (const tier of ["UNLIMITED", "PRO"]) {
+        if (timingSafeEqual(cleanKey, masterFor(tier, periodCode))) {
+          return [true, tier, days, `کلید لایسنس سراسری (${label}) با موفقیت تأیید شد.`];
+        }
+      }
+    }
+
+    // ۲. کلیدهای قدیمی بدون تگ مدت (مادام‌العمر)
     for (const candidate of [ident, userCode]) {
       for (const tier of ["PRO", "UNLIMITED", "ENTERPRISE"]) {
-        const expected = generateKey(candidate, tier, periodCode);
-        if (timingSafeEqual(cleanKey, expected)) {
-          return [true, tier, days, `لایسنس ${label} با موفقیت فعال شد.`];
+        const sig = hmacHex(`LISTIA:${candidate}:${getUserCode(candidate)}:${tier}`, secret);
+        const legacyExpected = `LST-${sig.slice(0, 4)}-${sig.slice(4, 8)}-${sig.slice(8, 12)}-${sig.slice(12, 16)}`;
+        if (timingSafeEqual(cleanKey, legacyExpected)) {
+          return [true, tier, null, "لایسنس مادام‌العمر با موفقیت فعال شد."];
         }
       }
     }
     for (const tier of ["UNLIMITED", "PRO"]) {
-      const expectedMaster = generateMasterKey(tier, periodCode);
-      if (timingSafeEqual(cleanKey, expectedMaster)) {
-        return [true, tier, days, `کلید لایسنس سراسری (${label}) با موفقیت تأیید شد.`];
+      const sig = hmacHex(`LISTIA:MASTER_KEY_UNIVERSAL:${tier}`, secret);
+      const legacyMaster = `LST-${sig.slice(0, 4)}-${sig.slice(4, 8)}-${sig.slice(8, 12)}-${sig.slice(12, 16)}`;
+      if (timingSafeEqual(cleanKey, legacyMaster)) {
+        return [true, tier, null, "کلید لایسنس سراسری مادام‌العمر با موفقیت تأیید شد."];
       }
     }
   }
 
-  // ۲. کلیدهای قدیمی بدون تگ مدت (مادام‌العمر)
-  for (const candidate of [ident, userCode]) {
-    for (const tier of ["PRO", "UNLIMITED", "ENTERPRISE"]) {
-      const sig = hmacHex(`LISTIA:${candidate}:${getUserCode(candidate)}:${tier}`);
-      const legacyExpected = `LST-${sig.slice(0, 4)}-${sig.slice(4, 8)}-${sig.slice(8, 12)}-${sig.slice(12, 16)}`;
-      if (timingSafeEqual(cleanKey, legacyExpected)) {
-        return [true, tier, null, "لایسنس مادام‌العمر با موفقیت فعال شد."];
-      }
-    }
-  }
-  for (const tier of ["UNLIMITED", "PRO"]) {
-    const sig = hmacHex(`LISTIA:MASTER_KEY_UNIVERSAL:${tier}`);
-    const legacyMaster = `LST-${sig.slice(0, 4)}-${sig.slice(4, 8)}-${sig.slice(8, 12)}-${sig.slice(12, 16)}`;
-    if (timingSafeEqual(cleanKey, legacyMaster)) {
-      return [true, tier, null, "کلید لایسنس سراسری مادام‌العمر با موفقیت تأیید شد."];
-    }
-  }
-
-  return [false, null, null, "کلید لایسنس وارد شده نامعتبر است یا برای این حساب صادر نشده است."];
+  return invalid;
 }
 
 /** نام‌های کاربری رزروشده‌ی مدیر */

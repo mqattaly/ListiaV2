@@ -1,0 +1,71 @@
+{
+  "scenario": "readMix",
+  "concurrency": 250,
+  "duration_s": 20,
+  "total_requests": 5215,
+  "total_rps": 260.8,
+  "mb_received": 184,
+  "status_codes": {
+    "200": 5215
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.3,
+    "lag_p95_ms": 7.8,
+    "lag_p99_ms": 24.8,
+    "lag_max_ms": 40
+  },
+  "rss_mb": 143,
+  "endpoints": [
+    {
+      "endpoint": "GET /api/dashboard",
+      "count": 1781,
+      "rps": 89,
+      "avg_ms": 1034.3,
+      "p50": 527.8,
+      "p95": 2980.4,
+      "p99": 3236.9,
+      "max": 3246
+    },
+    {
+      "endpoint": "GET /api/purchases",
+      "count": 1550,
+      "rps": 77.5,
+      "avg_ms": 1065.8,
+      "p50": 536.5,
+      "p95": 2986.9,
+      "p99": 3240.2,
+      "max": 3259
+    },
+    {
+      "endpoint": "GET /api/estimate",
+      "count": 884,
+      "rps": 44.2,
+      "avg_ms": 1108.3,
+      "p50": 539.3,
+      "p95": 2992.2,
+      "p99": 3239.3,
+      "max": 3253
+    },
+    {
+      "endpoint": "GET /api/suppliers",
+      "count": 548,
+      "rps": 27.4,
+      "avg_ms": 1105.1,
+      "p50": 530.6,
+      "p95": 2993.5,
+      "p99": 3236.7,
+      "max": 3250
+    },
+    {
+      "endpoint": "GET /api/suppliers/:id",
+      "count": 452,
+      "rps": 22.6,
+      "avg_ms": 1109,
+      "p50": 556.8,
+      "p95": 2990.9,
+      "p99": 3239.9,
+      "max": 3248
+    }
+  ]
+}

@@ -8,7 +8,29 @@ const SEARCH_UA =
   "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
 const CACHE_TTL = 45_000;
+const CACHE_MAX = 300;
 const cache = new Map();
+
+function cacheSet(key, data) {
+  cache.set(key, { at: Date.now(), data });
+  // سقف ظرفیت + حذف منقضی‌ها (LRU بر اساس ترتیب درج)
+  if (cache.size <= CACHE_MAX) return;
+  const now = Date.now();
+  for (const [k, v] of cache) {
+    if (cache.size <= CACHE_MAX * 0.8) break;
+    if (now - v.at > CACHE_TTL) cache.delete(k);
+  }
+  while (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) {
+    if (now - v.at > CACHE_TTL) cache.delete(k);
+  }
+}, 60_000).unref?.();
 
 export const PRICE_SOURCES = {
   digikala: {
@@ -376,7 +398,7 @@ export async function priceSearch(query, siteUrl = "", source = "") {
     errors: errors.slice(0, 8),
   };
   if (data.results.length && !safeSite) {
-    cache.set(cacheKey, { at: Date.now(), data });
+    cacheSet(cacheKey, data);
   }
   return data;
 }

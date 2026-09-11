@@ -1,0 +1,31 @@
+{
+  "scenario": "health",
+  "concurrency": 50,
+  "duration_s": 20,
+  "total_requests": 56441,
+  "total_rps": 2822.1,
+  "mb_received": 2.8,
+  "status_codes": {
+    "200": 56441
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 2.3,
+    "lag_p95_ms": 12.7,
+    "lag_p99_ms": 20.9,
+    "lag_max_ms": 26
+  },
+  "rss_mb": 133,
+  "endpoints": [
+    {
+      "endpoint": "GET /healthz",
+      "count": 56441,
+      "rps": 2822.1,
+      "avg_ms": 17.7,
+      "p50": 27.8,
+      "p95": 55.8,
+      "p99": 74.8,
+      "max": 103
+    }
+  ]
+}
