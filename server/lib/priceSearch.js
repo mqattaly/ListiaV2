@@ -48,6 +48,11 @@ export const PRICE_SOURCES = {
     label: "باسلام",
     domains: ["basalam.com"],
   },
+  tedadbala: {
+    id: "tedadbala",
+    label: "تداد بالا (عمده)",
+    domains: ["tedadbala.com"],
+  },
 };
 
 const SOURCE_ALIASES = {
@@ -59,6 +64,10 @@ const SOURCE_ALIASES = {
   ترب: "torob",
   basalam: "basalam",
   باسلام: "basalam",
+  tedadbala: "tedadbala",
+  "تدادبالا": "tedadbala",
+  "تداد بالا": "tedadbala",
+  تداد: "tedadbala",
 };
 
 function sourceForUrl(url) {
@@ -108,6 +117,7 @@ const SOURCE_DEFAULT_UNIT = {
   digikala: "rial",
   torob: "toman",
   basalam: "rial",
+  tedadbala: "toman",
 };
 
 function detectUnitFromCurrency(currency) {
@@ -262,10 +272,63 @@ async function searchBasalam(query) {
     .filter(Boolean);
 }
 
+// تداد بالا: فروشگاه عمده‌فروشی روی ووکامرس — Store API عمومی (قیمت‌ها تومان)
+async function searchTedadbala(query) {
+  const fields = "id,name,permalink,prices,price_html,images,is_in_stock,on_sale,type";
+  // توجه: Store API مقدار orderby=relevance را نمی‌پذیرد؛ با وجود search خودش
+  // نتایج مرتبط را اول می‌آورد (مقادیر مجاز: date/popularity/rating/...).
+  const url =
+    "https://tedadbala.com/wp-json/wc/store/v1/products?per_page=8&_fields=" +
+    encodeURIComponent(fields) +
+    "&search=" +
+    encodeURIComponent(query);
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const products = await res.json();
+  if (!Array.isArray(products)) return [];
+  return products
+    .filter((p) => p.is_in_stock !== false)
+    .map((item) => {
+      const prices = item.prices ?? {};
+
+      // کمینه‌ی قیمت یک بازه (محصول متغیر) در نسخه‌های مختلف Store API با
+      // کلیدهای minimum_amount یا min_amount آمده و مقدارش رشته یا شیء است.
+      const amountValue = (a) => {
+        if (a == null) return null;
+        if (typeof a === "string" || typeof a === "number") return String(a);
+        return a.sale_price || a.price || a.regular_price || null;
+      };
+      const range = prices.price_range ?? null;
+      const rangeMin = amountValue(range?.minimum_amount ?? range?.min_amount ?? range?.min_price);
+      // محصول متغیر: قیمت واحد خالی است و بازه داده می‌شود؛ کمینه را مبنا بگذار
+      const rawPrice =
+        prices.sale_price ||
+        prices.price ||
+        prices.regular_price ||
+        rangeMin ||
+        null;
+      const image =
+        item.images?.[0]?.src ||
+        item.images?.[0]?.thumbnail ||
+        "";
+      return buildResult({
+        title: item.name ?? "",
+        rawValue: rawPrice,
+        sourceId: "tedadbala",
+        url: item.permalink || "",
+        image,
+        currency: prices.currency_code || prices.currency_symbol || "IRT",
+        priceText: typeof item.price_html === "string" ? item.price_html : "",
+      });
+    })
+    .filter(Boolean);
+}
+
 const SEARCHERS = {
   digikala: searchDigikala,
   torob: searchTorob,
   basalam: searchBasalam,
+  tedadbala: searchTedadbala,
 };
 
 function resultMatchesQuery(item, query) {

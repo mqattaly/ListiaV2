@@ -49,7 +49,10 @@ export default function Estimate() {
     if (budgetBusy) return;
     setBudgetBusy(true);
     try {
-      const d = await api.post("/api/estimate/budget", { budget: budgetInput });
+      const d = await api.post("/api/estimate/budget", {
+        budget: budgetInput,
+        supplier_id: filter || undefined,
+      });
       setSnap(d);
       setBudgetInput(d.budget ?? "");
       toast(d.price_unit_note || "سقف بودجه ذخیره شد", "success");
@@ -64,7 +67,7 @@ export default function Estimate() {
     setSavingItem(product.id);
     try {
       // قیمت که پاک شود، لینک هم همراهش پاک می‌شود (سرور هم همین قانون را دارد)
-      const body = { ...patch };
+      const body = { ...patch, supplier_id: filter || undefined };
       if ("unit_price" in body && !String(body.unit_price ?? "").trim() && !("price_url" in body)) {
         body.price_url = "";
       }
@@ -96,7 +99,10 @@ export default function Estimate() {
 
   const moveToNext = async (product, qty) => {
     try {
-      const d = await api.post(`/api/estimate/next/${product.id}`, { qty: qty ?? undefined });
+      const d = await api.post(`/api/estimate/next/${product.id}`, {
+        qty: qty ?? undefined,
+        supplier_id: filter || undefined,
+      });
       setSnap(d);
       toast(`${d.sent_label} عدد به «خرید بعدی» منتقل شد`, "success");
     } catch (err) {
@@ -106,7 +112,9 @@ export default function Estimate() {
 
   const restoreFromNext = async (product) => {
     try {
-      const d = await api.post(`/api/estimate/next/${product.id}/restore`, {});
+      const d = await api.post(`/api/estimate/next/${product.id}/restore`, {
+        supplier_id: filter || undefined,
+      });
       setSnap(d);
       toast(`${d.restored_label} عدد به لیست اصلی برگشت`, "success");
     } catch (err) {
@@ -437,14 +445,38 @@ function PriceSearchModal({ state, onClose, onPick }) {
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [zoom, setZoom] = useState(null); // { image, title, x, y }
 
   useEffect(() => {
     if (state?.product) {
       setQ(state.product.product_name);
       setResults(null);
       setError("");
+      setZoom(null);
     }
   }, [state]);
+
+  // نمایش نسخه‌ی بزرگ عکس هنگام هاور (شناور کنار نشانگر، بدون بریده‌شدن توسط overflow)
+  const zoomPos = (ev) => {
+    const W = 260;
+    const H = 260;
+    const pad = 16;
+    let x = ev.clientX + 22;
+    if (x + W + pad > window.innerWidth) x = ev.clientX - W - 22;
+    x = Math.max(pad, x);
+    let y = ev.clientY - H / 2;
+    y = Math.max(pad, Math.min(y, window.innerHeight - H - pad));
+    return { x, y };
+  };
+  const showZoom = (r) => (e) => {
+    if (!r.image) return;
+    setZoom({ image: r.image, title: r.title, ...zoomPos(e) });
+  };
+  const moveZoom = (e) => {
+    if (!zoom) return;
+    setZoom((z) => (z ? { ...z, ...zoomPos(e) } : z));
+  };
+  const hideZoom = () => setZoom(null);
 
   const search = async (e) => {
     e?.preventDefault();
@@ -452,6 +484,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
     setBusy(true);
     setError("");
     setResults(null);
+    setZoom(null);
     try {
       const data = await api.get(
         `/api/estimate/search?q=${encodeURIComponent(q.trim())}${source ? `&source=${source}` : ""}`
@@ -470,19 +503,23 @@ function PriceSearchModal({ state, onClose, onPick }) {
   return (
     <Modal
       open={Boolean(state)}
-      onClose={onClose}
+      onClose={() => {
+        hideZoom();
+        onClose();
+      }}
       size="lg"
       icon={<Search size={19} />}
       title="جستجوی قیمت زنده"
-      subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب و باسلام"}
+      subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب، باسلام و تداد بالا"}
     >
       <form onSubmit={search} className="flex gap-8">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام کالا…" />
-        <select className="select" style={{ maxWidth: 150 }} value={source} onChange={(e) => setSource(e.target.value)}>
+        <select className="select" style={{ maxWidth: 170 }} value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="">همه‌ی منابع</option>
           <option value="digikala">دیجی‌کالا</option>
           <option value="torob">ترب</option>
           <option value="basalam">باسلام</option>
+          <option value="tedadbala">تداد بالا (عمده)</option>
         </select>
         <button className="btn btn-primary" type="submit" disabled={busy}>
           {busy ? <BtnSpinner size={15} /> : "جستجو"}
@@ -516,7 +553,30 @@ function PriceSearchModal({ state, onClose, onPick }) {
               {results.results.map((r, i) => (
                 <StaggerItem key={i}>
                   <div className="price-result">
-                    {r.image ? <img src={r.image} alt="" loading="lazy" /> : <span className="pr-icon"><ShoppingBasket size={18} /></span>}
+                    {r.image ? (
+                      <a
+                        href={r.image}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="prc-thumb"
+                        title="برای دیدن عکس بزرگ، نگه دارید یا کلیک کنید"
+                        onMouseEnter={showZoom(r)}
+                        onMouseMove={moveZoom}
+                        onMouseLeave={hideZoom}
+                        onClick={(e) => {
+                          // روی موبایل که هاور وجود ندارد، اول ضربه عکس را بزرگ کند
+                          if (window.matchMedia?.("(hover: none)").matches) {
+                            e.preventDefault();
+                            setZoom((z) => (z?.image === r.image ? null : { image: r.image, title: r.title, x: 60, y: 60 }));
+                          }
+                        }}
+                      >
+                        <img src={r.image} alt="" loading="lazy" />
+                        <span className="prc-zoom-hint"><Search size={11} /></span>
+                      </a>
+                    ) : (
+                      <span className="pr-icon"><ShoppingBasket size={18} /></span>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="prc-title">{r.title}</div>
                       <span className="badge" style={{ marginTop: 6 }}>{r.source_label}</span>
@@ -533,6 +593,18 @@ function PriceSearchModal({ state, onClose, onPick }) {
             </StaggerList>
           )}
         </>
+      )}
+
+      {zoom && (
+        <div
+          className="prc-zoom"
+          style={{ left: zoom.x, top: zoom.y }}
+          onMouseMove={moveZoom}
+          onClick={() => setZoom(null)}
+        >
+          <img src={zoom.image} alt={zoom.title} />
+          <div className="prc-zoom-title">{zoom.title}</div>
+        </div>
       )}
     </Modal>
   );

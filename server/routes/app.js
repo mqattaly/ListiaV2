@@ -555,6 +555,8 @@ router.post("/estimate/item/:id", (req, res) => {
   const product = ownedProduct(req.user.id, req.params.id);
   if (!product) return jsonError(res, "محصول پیدا نشد.", 404);
   const body = req.body ?? {};
+  // حفظ فیلتر تأمین‌کننده در اسنپ‌شات پاسخ تا پس از انتخاب قیمت، فیلتر نپرد
+  const supplierFilter = body.supplier_id ?? null;
   let priceUnitNote = "";
   let priceCleared = false;
   try {
@@ -584,7 +586,7 @@ router.post("/estimate/item/:id", (req, res) => {
     run("UPDATE products SET price_url = ? WHERE id = ?", "", product.id);
     product.price_url = "";
   }
-  const snapshot = estimateSnapshot(req.user.id);
+  const snapshot = estimateSnapshot(req.user.id, supplierFilter);
   snapshot.product = productPayload(product, null, req.user);
   if (priceUnitNote) snapshot.price_unit_note = priceUnitNote;
   res.json(snapshot);
@@ -602,7 +604,7 @@ router.post("/estimate/budget", (req, res) => {
   } catch (err) {
     return jsonError(res, err.message);
   }
-  const snap = estimateSnapshot(req.user.id);
+  const snap = estimateSnapshot(req.user.id, (req.body ?? {}).supplier_id ?? null);
   if (note) snap.price_unit_note = note;
   res.json(snap);
 });
@@ -612,7 +614,7 @@ router.post("/estimate/next/:id", (req, res) => {
   if (!product) return jsonError(res, "محصول پیدا نشد.", 404);
   const sent = applyNextQty(product, (req.body ?? {}).qty);
   if (sent <= 0) return jsonError(res, "تعداد معتبری برای انتقال باقی نمانده است.");
-  const snapshot = estimateSnapshot(req.user.id);
+  const snapshot = estimateSnapshot(req.user.id, (req.body ?? {}).supplier_id ?? null);
   snapshot.product = productPayload(product, null, req.user);
   snapshot.sent = sent;
   snapshot.sent_label = storeAmount(sent);
@@ -624,7 +626,7 @@ router.post("/estimate/next/:id/restore", (req, res) => {
   if (!product) return jsonError(res, "محصول پیدا نشد.", 404);
   const restored = restoreNextQty(product, (req.body ?? {}).qty);
   if (restored <= 0) return jsonError(res, "موردی در خرید بعدی برای بازگرداندن نیست.");
-  const snapshot = estimateSnapshot(req.user.id);
+  const snapshot = estimateSnapshot(req.user.id, (req.body ?? {}).supplier_id ?? null);
   snapshot.product = productPayload(product, null, req.user);
   snapshot.restored = restored;
   snapshot.restored_label = storeAmount(restored);

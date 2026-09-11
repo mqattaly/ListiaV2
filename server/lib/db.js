@@ -15,9 +15,11 @@ fs.mkdirSync(path.dirname(path.resolve(DB_PATH)), { recursive: true });
 export const db = new DatabaseSync(DB_PATH);
 
 // ─── تنظیمات کارایی/پایداری ─────────────────────────────────────────────────
+// busy_timeout باید پیش از تغییر journal_mode ست شود تا وقتی چند ورکر هم‌زمان
+// روی دیتابیس تازه بالا می‌آیند، تبدیل به WAL با «database is locked» نیفتد.
+db.exec("PRAGMA busy_timeout = 10000;"); // هنگام قفل نوشتنِ نمونه‌های دیگر، تا ۱۰ ثانیه صبر کند
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
-db.exec("PRAGMA busy_timeout = 10000;"); // هنگام قفل نوشتنِ نمونه‌های دیگر، تا ۱۰ ثانیه صبر کند
 db.exec("PRAGMA synchronous = NORMAL;"); // در WAL امن و بسیار سریع‌تر از FULL
 db.exec("PRAGMA temp_store = MEMORY;");
 db.exec("PRAGMA wal_autocheckpoint = 1000;");
