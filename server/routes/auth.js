@@ -146,25 +146,45 @@ router.post("/signup", ah(async (req, res) => {
 
   if (usernameUser) {
     if (!Number(usernameUser.email_verified)) {
-      const extra = await sendVerificationCode(usernameUser).catch(() => ({ dev_code: null }));
-      return jsonError(
-        res,
-        "این نام کاربری قبلاً ثبت شده ولی ایمیلش هنوز تایید نشده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
-        409,
-        { need_verification: true, email: usernameUser.email, ...extra }
-      );
+      try {
+        const extra = await sendVerificationCode(usernameUser);
+        return jsonError(
+          res,
+          "این نام کاربری قبلاً ثبت شده ولی ایمیلش هنوز تایید نشده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
+          409,
+          { need_verification: true, email: usernameUser.email, ...extra }
+        );
+      } catch (err) {
+        console.error("ارسال مجدد کد (نام کاربری تکراری) ناموفق:", err);
+        return jsonError(
+          res,
+          "این نام کاربری قبلاً ثبت شده ولی ارسال کد تایید ایمیل ناموفق بود. تنظیمات SMTP را بررسی و «ارسال مجدد» را بزنید.",
+          502,
+          { need_verification: true, email: usernameUser.email }
+        );
+      }
     }
     return jsonError(res, "این نام کاربری قبلاً وجود دارد.");
   }
   if (emailUser) {
     if (!Number(emailUser.email_verified)) {
-      const extra = await sendVerificationCode(emailUser).catch(() => ({ dev_code: null }));
-      return jsonError(
-        res,
-        "این ایمیل قبلاً برای یک ثبت‌نام تاییدنشده استفاده شده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
-        409,
-        { need_verification: true, email: emailUser.email, ...extra }
-      );
+      try {
+        const extra = await sendVerificationCode(emailUser);
+        return jsonError(
+          res,
+          "این ایمیل قبلاً برای یک ثبت‌نام تاییدنشده استفاده شده است. کد تایید را وارد کنید یا ایمیل را تغییر دهید.",
+          409,
+          { need_verification: true, email: emailUser.email, ...extra }
+        );
+      } catch (err) {
+        console.error("ارسال مجدد کد (ایمیل تکراری) ناموفق:", err);
+        return jsonError(
+          res,
+          "این ایمیل قبلاً ثبت شده ولی ارسال کد تایید ناموفق بود. تنظیمات SMTP را بررسی و «ارسال مجدد» را بزنید.",
+          502,
+          { need_verification: true, email: emailUser.email }
+        );
+      }
     }
     return jsonError(res, "این ایمیل قبلاً ثبت شده است.");
   }
@@ -415,13 +435,23 @@ router.post("/change-verification-email", ah(async (req, res) => {
 
   run("UPDATE users SET email = ? WHERE id = ?", newEmail, user.id);
   const fresh = getUserById(user.id);
-  const extra = await sendVerificationCode(fresh).catch(() => ({ dev_code: null }));
-  res.json({
-    success: true,
-    message: "ایمیل تغییر کرد و کد تایید جدید ارسال شد.",
-    email: newEmail,
-    ...extra,
-  });
+  try {
+    const extra = await sendVerificationCode(fresh);
+    res.json({
+      success: true,
+      message: "ایمیل تغییر کرد و کد تایید جدید ارسال شد.",
+      email: newEmail,
+      ...extra,
+    });
+  } catch (err) {
+    console.error("ارسال کد پس از تغییر ایمیل ناموفق:", err);
+    return jsonError(
+      res,
+      "ایمیل تغییر کرد اما ارسال کد جدید ناموفق بود. تنظیمات SMTP را بررسی و «ارسال مجدد» را بزنید.",
+      502,
+      { need_verification: true, email: newEmail }
+    );
+  }
 }));
 
 export default router;

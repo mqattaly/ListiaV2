@@ -5,6 +5,7 @@
 //
 // تعداد ورکرها: متغیر WORKERS (پیش‌فرض = تعداد هسته‌ها). برای تک‌پردازشی:
 // WORKERS=1 یا مستقیماً server/index.js را اجرا کنید (نسخه‌ی دسکتاپ همین کار را می‌کند).
+import "./lib/load-env.js"; // بارگذاری .env پیش از خواندن متغیرها در ورکرها
 import cluster from "node:cluster";
 import { availableParallelism } from "node:os";
 

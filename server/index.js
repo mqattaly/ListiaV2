@@ -1,4 +1,5 @@
 // ─── سرور لیستیا — Express + SQLite (node:sqlite) ───────────────────────────
+import "./lib/load-env.js"; // باید پیش از همه‌ی ماژول‌هایی که env می‌خوانند باشد
 import express from "express";
 import helmet from "helmet";
 import compression from "compression";
@@ -8,6 +9,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { attachUser, requireAuth, hashPassword } from "./lib/auth.js";
+import { smtpConfigured } from "./lib/mailer.js";
 import { get, run, checkpoint, closeDb } from "./lib/db.js";
 
 import authRoutes from "./routes/auth.js";
@@ -203,6 +205,17 @@ app.use((err, _req, res, _next) => {
 const server = app.listen(PORT, "0.0.0.0", () => {
   const mode = process.env.NODE_ENV === "production" ? "production" : "development";
   console.log(`🚀 سرور لیستیا روی پورت ${PORT} بالا آمد (${mode}, http://0.0.0.0:${PORT})`);
+  if (smtpConfigured()) {
+    console.log(
+      `📧 SMTP پیکربندی شده: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT || 465} ` +
+        `کاربر=${process.env.SMTP_USERNAME} (${Number(process.env.SMTP_PORT) === 465 ? "SSL" : "STARTTLS"})`
+    );
+  } else if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "⚠️  SMTP پیکربندی نشده است؛ ثبت‌نام کاربر جدید کد تأیید ایمیل نمی‌فرستد.\n" +
+        "   متغیرهای SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD را در .env یا پنل هاست ست کنید."
+    );
+  }
 });
 
 // ─── خاموشی نرم: پایان پذیرش اتصال جدید، سپس چک‌پوینت و بستن دیتابیس ───────
