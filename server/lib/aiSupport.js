@@ -48,6 +48,9 @@ const KNOWLEDGE = `
 - جستجوی قیمت زنده: از داخل صفحه‌ی برآورد، روی دکمه‌ی ذره‌بین هر محصول می‌توان قیمت آنلاین را
   از فروشگاه‌های دیجی‌کالا، ترب، باسلام و «تعداد بالا (عمده)» جستجو و با یک کلیک قیمت و لینک را ثبت کرد.
   با هاور روی عکس نتایج، عکس بزرگ نمایش داده می‌شود و می‌توان منبع را فیلتر کرد.
+- برآورد هوشمند شغل: دکمه‌ی «برآورد هوشمند شغل» در صفحه‌ی برآورد؛ کاربر شغلش را می‌نویسد و هوش مصنوعی
+  فهرست لوازم موردنیاز با تعداد پیشنهادی و منبع مناسب هر قلم را می‌سازد، بعد سرور قیمت زنده‌ی بازار را
+  برای همه می‌گیرد و با یک کلیک کل فهرست همراه قیمت و لینک خرید به لیست یک تأمین‌کننده افزوده می‌شود.
 - جستجوی سراسری (کلید میانبر Ctrl+K یا دکمه جستجو در منو): یافتن سریع محصول و تأمین‌کننده.
 - ایمپورت اکسل/CSV: ورود گروهی تأمین‌کننده و محصول از فایل اکسل در بخش «ایمپورت اکسل»
   (فایل نمونه داخل همان صفحه هست؛ خطاهای هر ردیف جداگانه گزارش می‌شود).
@@ -150,6 +153,106 @@ function sanitizeHistory(history) {
 }
 
 /**
+ * گفتگوی خام با درگاه چابکان (سازگار با OpenAI) با مدل اصلی و fallback خودکار.
+ * هر کاربرد هوش مصنوعی دیگری در اپ از همین تابع استفاده می‌کند.
+ *
+ * @param {Array<{role:string, content:string}>} messages
+ * @param {{maxTokens?:number, temperature?:number, timeoutMs?:number, label?:string, maxChars?:number}} [opts]
+ * @returns {Promise<{reply:string, model:string}>}
+ */
+export async function aiChatComplete(messages, opts = {}) {
+  if (!aiConfigured()) {
+    const err = new Error("سرویس هوش مصنوعی در حال حاضر فعال نیست.");
+    err.status = 503;
+    throw err;
+  }
+  const label = opts.label || "AI";
+  const maxTokens = Number(opts.maxTokens ?? 1000);
+  const temperature = Number(opts.temperature ?? Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3"));
+  const timeoutMs = Number(opts.timeoutMs ?? (process.env.CHABOKAN_AI_TIMEOUT_MS || "30000"));
+  const maxChars = Number(opts.maxChars ?? 4000);
+  const baseUrl = (process.env.CHABOKAN_AI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const models = aiModels();
+
+  const callOnce = async (model) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res;
+    try {
+      const body = { model, messages, temperature, max_tokens: maxTokens };
+      if (/gpt-oss/i.test(model)) body.reasoning_effort = "low";
+      res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${process.env.CHABOKAN_AI_API_KEY.trim()}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      const e = new Error(
+        err?.name === "AbortError"
+          ? "پاسخ هوش مصنوعی طول کشید؛ دوباره تلاش کنید."
+          : "ارتباط با سرویس هوش مصنوعی برقرار نشد؛ کمی بعد دوباره تلاش کنید."
+      );
+      e.status = err?.name === "AbortError" ? 504 : 502;
+      e.retryable = true;
+      throw e;
+    }
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      let detail = "";
+      try {
+        const b = await res.json();
+        detail = b?.error?.message || b?.message || "";
+      } catch {
+        /* پاسخ غیر JSON */
+      }
+      console.error(
+        `${label}: خطای ${res.status} از درگاه چابکان (مدل ${model})`,
+        detail ? `→ ${String(detail).slice(0, 200)}` : ""
+      );
+      const e = new Error(
+        res.status === 401 || res.status === 403
+          ? "کلید هوش مصنوعی پذیرفته نشد؛ لطفاً تنظیمات سرور را بررسی کنید."
+          : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
+      );
+      e.status = res.status === 401 || res.status === 403 ? res.status : 502;
+      e.retryable = !(res.status === 401 || res.status === 403);
+      throw e;
+    }
+
+    const b = await res.json().catch(() => null);
+    const reply = b?.choices?.[0]?.message?.content?.toString().trim();
+    if (!reply) {
+      const e = new Error("پاسخی از هوش مصنوعی دریافت نشد؛ دوباره تلاش کنید.");
+      e.status = 502;
+      e.retryable = true;
+      throw e;
+    }
+    return { reply: reply.slice(0, maxChars), model };
+  };
+
+  // مدل اصلی و در صورت خطای موقت، مدل(های) پشتیبان
+  let lastErr;
+  for (let i = 0; i < models.length; i++) {
+    try {
+      const out = await callOnce(models[i]);
+      if (i > 0) console.log(`${label}: مدل پشتیبان ${models[i]} پاسخ داد.`);
+      return out;
+    } catch (err) {
+      lastErr = err;
+      if (!err.retryable) break;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * گفتگو با دستیار پشتیبانی.
  * @param {{message?:string, history?:Array}} input
  * @returns {Promise<{reply:string}>}
@@ -173,93 +276,10 @@ export async function supportChat({ message = "", history = [] } = {}) {
     { role: "user", content: userMessage },
   ];
 
-  const baseUrl = (process.env.CHABOKAN_AI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const timeoutMs = Number(process.env.CHABOKAN_AI_TIMEOUT_MS || "30000");
-  const temperature = Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3");
-  const models = aiModels();
-
-  // برای مدل‌های استدلالی (مثل gpt-oss) تلاش می‌کنیم بخش فکرکردن کوتاه بماند تا
-  // توکن/زمان بیخود مصرف نشود؛ پارامتر فقط برای همین مدل‌ها فرستاده می‌شود.
-  const callOnce = async (model) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res;
-    try {
-      const body = {
-        model,
-        messages,
-        temperature,
-        max_tokens: 1000,
-      };
-      if (/gpt-oss/i.test(model)) body.reasoning_effort = "low";
-      res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${process.env.CHABOKAN_AI_API_KEY.trim()}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      const e = new Error(
-        err?.name === "AbortError"
-          ? "پاسخ دستیار طول کشید؛ دوباره تلاش کنید."
-          : "ارتباط با سرویس هوش مصنوعی برقرار نشد؛ کمی بعد دوباره تلاش کنید."
-      );
-      e.status = err?.name === "AbortError" ? 504 : 502;
-      e.retryable = true;
-      throw e;
-    }
-    clearTimeout(timer);
-
-    if (!res.ok) {
-      let detail = "";
-      try {
-        const b = await res.json();
-        detail = b?.error?.message || b?.message || "";
-      } catch {
-        /* پاسخ غیر JSON */
-      }
-      console.error(
-        `پشتیبانی AI: خطای ${res.status} از درگاه چابکان (مدل ${model})`,
-        detail ? `→ ${String(detail).slice(0, 200)}` : ""
-      );
-      const e = new Error(
-        res.status === 401 || res.status === 403
-          ? "کلید هوش مصنوعی پذیرفته نشد؛ لطفاً تنظیمات سرور را بررسی کنید."
-          : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
-      );
-      // مشکل کلید (۴۰۱/۴۰۳) با عوض‌شدن مدل حل نمی‌شود
-      e.status = res.status === 401 || res.status === 403 ? res.status : 502;
-      e.retryable = !(res.status === 401 || res.status === 403);
-      throw e;
-    }
-
-    const b = await res.json().catch(() => null);
-    const reply = b?.choices?.[0]?.message?.content?.toString().trim();
-    if (!reply) {
-      const e = new Error("پاسخی از دستیار دریافت نشد؛ دوباره تلاش کنید.");
-      e.status = 502;
-      e.retryable = true;
-      throw e;
-    }
-    return reply.slice(0, 4000);
-  };
-
-  // مدل اصلی و در صورت خطای موقت، مدل(های) پشتیبان
-  let lastErr;
-  for (let i = 0; i < models.length; i++) {
-    try {
-      const reply = await callOnce(models[i]);
-      if (i > 0) console.log(`پشتیبانی AI: مدل پشتیبان ${models[i]} پاسخ داد.`);
-      return { reply };
-    } catch (err) {
-      lastErr = err;
-      if (!err.retryable) break;
-    }
-  }
-  throw lastErr;
+  const { reply } = await aiChatComplete(messages, {
+    maxTokens: 1000,
+    temperature: Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3"),
+    label: "پشتیبانی AI",
+  });
+  return { reply };
 }

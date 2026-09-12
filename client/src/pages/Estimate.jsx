@@ -13,19 +13,22 @@ import {
   ShoppingBasket,
   ExternalLink,
   Eraser,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
 import { fmtAmount, fmtShort } from "../format.js";
 import { BtnSpinner, EmptyState, SkeletonRows, StaggerItem, StaggerList } from "../components/bits.jsx";
 import Modal from "../components/Modal.jsx";
+import JobEstimateModal from "../components/JobEstimateModal.jsx";
 
 export default function Estimate() {
   const { toast, confirm } = useApp();
   const [snap, setSnap] = useState(null);
   const [filter, setFilter] = useState("");
   const [budgetInput, setBudgetInput] = useState("");
-  const [priceModal, setPriceModal] = useState(null); // {product}
+  const [priceModal, setPriceModal] = useState(null); // {product} یا {query}
+  const [jobModal, setJobModal] = useState(false);
   const [savingItem, setSavingItem] = useState(null);
   const [budgetBusy, setBudgetBusy] = useState(false);
   const [trimBusy, setTrimBusy] = useState(false);
@@ -180,6 +183,9 @@ export default function Estimate() {
           </p>
         </div>
         <div className="page-actions">
+          <button className="btn btn-primary" onClick={() => setJobModal(true)} title="هوش مصنوعی بر اساس شغلت فهرست اقلام و قیمت‌های بازار را آماده می‌کند">
+            <Sparkles size={16} /> برآورد هوشمند شغل
+          </button>
           <select className="select" style={{ width: 190 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">همه‌ی تأمین‌کننده‌ها</option>
             {snap.suppliers.map((s) => (
@@ -430,10 +436,25 @@ export default function Estimate() {
         onClose={() => setPriceModal(null)}
         onPick={(product, result) => {
           setPriceModal(null);
+          if (!product) return;
           // قیمت + لینک صفحه‌ی همان نتیجه با هم ذخیره می‌شوند
           saveItemField(product, { unit_price: String(result.price), price_url: result.url || "" });
           toast(`قیمت ${fmtAmount(result.price)} برای «${product.product_name}» ثبت شد`, "success");
         }}
+      />
+
+      {/* ─── مودال برآورد هوشمند شغل ─── */}
+      <JobEstimateModal
+        open={jobModal}
+        onClose={() => setJobModal(false)}
+        suppliers={snap.suppliers}
+        supplierId={filter}
+        onImported={(d) => {
+          setSnap(d);
+          toast(d.message || "اقلام به لیست افزوده شد", "success", 5200);
+          load(filter);
+        }}
+        onManualSearch={(name) => setPriceModal({ query: name })}
       />
     </div>
   );
@@ -450,6 +471,12 @@ function PriceSearchModal({ state, onClose, onPick }) {
   useEffect(() => {
     if (state?.product) {
       setQ(state.product.product_name);
+      setResults(null);
+      setError("");
+      setZoom(null);
+    } else if (state?.query) {
+      // حالت جستجوی دستی (از برآورد هوشمند شغلی): بدون محصول مقصد، فقط جست‌وجو
+      setQ(state.query);
       setResults(null);
       setError("");
       setZoom(null);
@@ -583,9 +610,15 @@ function PriceSearchModal({ state, onClose, onPick }) {
                     </div>
                     <div style={{ textAlign: "left" }}>
                       <div className="prc-price">{r.price_label}</div>
-                      <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }} onClick={() => onPick(state.product, r)}>
-                        انتخاب قیمت
-                      </button>
+                      {state.product ? (
+                        <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }} onClick={() => onPick(state.product, r)}>
+                          انتخاب قیمت
+                        </button>
+                      ) : (
+                        <a className="btn btn-sm" style={{ marginTop: 6 }} href={r.url} target="_blank" rel="noreferrer">
+                          مشاهده فروشنده <ExternalLink size={12} />
+                        </a>
+                      )}
                     </div>
                   </div>
                 </StaggerItem>
