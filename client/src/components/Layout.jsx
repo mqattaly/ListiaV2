@@ -310,12 +310,6 @@ export default function Layout() {
               <ShoppingBasket size={19} />
             </span>
             <span className="mt-title">{title}</span>
-            <button
-              className="btn btn-icon btn-ghost"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {theme === "dark" ? <SunMedium size={19} /> : <Moon size={19} />}
-            </button>
           </header>
 
           {/* ─── محتوا با ترنزیشن ورود ─── */}
@@ -336,6 +330,15 @@ export default function Layout() {
         </div>
         <BottomNav activeCount={activeCount} />
       </div>
+      {/* دکمه‌ی تعویض تم — فقط موبایل؛ پایین صفحه و بالای دکمه‌ی پشتیبانی تا دسترس‌پذیر باشد */}
+      <button
+        type="button"
+        className="theme-fab-m"
+        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        aria-label={theme === "dark" ? "تم روشن" : "تم تیره"}
+      >
+        {theme === "dark" ? <SunMedium size={18} /> : <Moon size={18} />}
+      </button>
       <SupportChat />
     </>
   );

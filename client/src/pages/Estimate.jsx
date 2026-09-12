@@ -1,5 +1,6 @@
 // برآورد قیمت: بودجه، قیمت واحد، خرید بعدی، جستجوی قیمت زنده
 import React, { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calculator,
@@ -14,6 +15,7 @@ import {
   ExternalLink,
   Eraser,
   Sparkles,
+  X,
 } from "lucide-react";
 import { api } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
@@ -285,14 +287,14 @@ export default function Estimate() {
                   {p.quantity} {p.unit}
                   {p.qty_per_unit ? <div style={{ fontSize: 10.5, color: "var(--text-3)" }}>×{p.qty_per_unit} در واحد</div> : null}
                 </span>
-                <div className="flex gap-6">
+                <div className="flex gap-6 er-prices">
                   <input
                     className="input mono"
                     defaultValue={p.unit_price ?? ""}
                     key={`price-${p.id}-${p.unit_price ?? ""}`}
                     placeholder="قیمت واحد (تومان)"
                     title="به تومان وارد کنید؛ برای مبلغ ریالی، کلمه‌ی «ریال» را کنار عدد بنویسید"
-                    style={{ direction: "ltr", minWidth: 110 }}
+                    style={{ direction: "ltr" }}
                     onBlur={(e) => {
                       if ((e.target.value ?? "") !== (p.unit_price ?? "")) {
                         saveItemField(p, { unit_price: e.target.value });
@@ -304,7 +306,7 @@ export default function Estimate() {
                     defaultValue={p.qty_per_unit ?? ""}
                     key={`per-${p.id}-${p.qty_per_unit ?? ""}`}
                     placeholder="تعداد در واحد"
-                    style={{ direction: "ltr", minWidth: 110 }}
+                    style={{ direction: "ltr" }}
                     onBlur={(e) => {
                       if ((e.target.value ?? "") !== (p.qty_per_unit ?? "")) {
                         saveItemField(p, { qty_per_unit: e.target.value });
@@ -312,7 +314,7 @@ export default function Estimate() {
                     }}
                   />
                 </div>
-                <div className="flex gap-6">
+                <div className="flex gap-6 er-actions">
                   <button
                     className="btn btn-sm btn-ghost tip"
                     data-tip="جستجوی قیمت زنده"
@@ -350,7 +352,7 @@ export default function Estimate() {
                   {p.row_total_label || "—"}
                   {p.row_total_label ? <small>تومان</small> : null}
                 </span>
-                <div className="flex gap-6">
+                <div className="flex gap-6 er-move">
                   <button
                     className="btn btn-sm tip"
                     data-tip="انتقال به خرید بعدی"
@@ -475,6 +477,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [zoom, setZoom] = useState(null); // { image, title, x, y }
+  const [lightbox, setLightbox] = useState(null); // { image, title } — بزرگ‌نمایی داخل همان صفحه
 
   useEffect(() => {
     try {
@@ -491,6 +494,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
       setResults(null);
       setError("");
       setZoom(null);
+      setLightbox(null);
       setUsedQueries([]);
       setSmartOn(false);
     }
@@ -559,7 +563,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
       subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب، باسلام و تعداد بالا"}
     >
       <form onSubmit={search}>
-        <div className="flex gap-8">
+        <div className="flex gap-8 ps-formrow">
           <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام کالا… (مثلاً: تی حوله‌ای)" />
           <select
             className="select"
@@ -654,26 +658,21 @@ function PriceSearchModal({ state, onClose, onPick }) {
                 <StaggerItem key={i}>
                   <div className="price-result">
                     {r.image ? (
-                      <a
-                        href={r.image}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
                         className="prc-thumb"
-                        title="برای دیدن عکس بزرگ، نگه دارید یا کلیک کنید"
+                        title="هاور: پیش‌نمایش بزرگ · کلیک: بزرگ‌نمایی در همین صفحه"
                         onMouseEnter={showZoom(r)}
                         onMouseMove={moveZoom}
                         onMouseLeave={hideZoom}
-                        onClick={(e) => {
-                          // روی موبایل که هاور وجود ندارد، اول ضربه عکس را بزرگ کند
-                          if (window.matchMedia?.("(hover: none)").matches) {
-                            e.preventDefault();
-                            setZoom((z) => (z?.image === r.image ? null : { image: r.image, title: r.title, x: 60, y: 60 }));
-                          }
+                        onClick={() => {
+                          hideZoom();
+                          setLightbox({ image: r.image, title: r.title });
                         }}
                       >
                         <img src={r.image} alt="" loading="lazy" />
                         <span className="prc-zoom-hint"><Search size={11} /></span>
-                      </a>
+                      </button>
                     ) : (
                       <span className="pr-icon"><ShoppingBasket size={18} /></span>
                     )}
@@ -706,6 +705,51 @@ function PriceSearchModal({ state, onClose, onPick }) {
           <div className="prc-zoom-title">{zoom.title}</div>
         </div>
       )}
+
+      {/* بزرگ‌نمایی کامل عکس — داخل همان صفحه، بدون باز شدن تب جدید */}
+      <ImageLightbox state={lightbox} onClose={() => setLightbox(null)} />
     </Modal>
+  );
+}
+
+// لایت‌باکس بزرگ‌نمایی عکس: با انیمیشن باز و بسته می‌شود؛ کلیک بیرون، دکمه یا Esc می‌بندد
+function ImageLightbox({ state, onClose }) {
+  useEffect(() => {
+    if (!state) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state, onClose]);
+
+  return createPortal(
+    <AnimatePresence>
+      {state && (
+        <motion.div
+          className="prc-lightbox"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onClose}
+        >
+          <motion.figure
+            initial={{ scale: 0.72, opacity: 0, y: 28 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.84, opacity: 0, y: 16 }}
+            transition={{ type: "spring", stiffness: 320, damping: 26 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={state.image} alt={state.title} draggable={false} />
+            {state.title && <figcaption>{state.title}</figcaption>}
+            <button type="button" className="prc-lightbox-close" onClick={onClose} aria-label="بستن">
+              <X size={16} />
+            </button>
+          </motion.figure>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
   );
 }

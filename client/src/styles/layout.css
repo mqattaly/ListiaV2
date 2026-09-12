@@ -341,6 +341,42 @@
   flex: 1;
 }
 
+/* دکمه‌ی تعویض تم — فقط موبایل؛ شناور بالای دکمه‌ی پشتیبانی (دسترس‌پذیر، نه چسبیده به بالای صفحه) */
+.theme-fab-m {
+  display: none;
+}
+@media (max-width: 940px) {
+  .theme-fab-m {
+    position: fixed;
+    left: 20px;
+    bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+    z-index: 299;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border-2);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: var(--text-2);
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
+      color-mix(in srgb, var(--bg-1) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    box-shadow: 0 10px 26px rgba(2, 8, 23, 0.35);
+    transition: color 0.2s, border-color 0.2s, transform 0.15s ease;
+  }
+  .theme-fab-m:hover {
+    color: var(--text-1);
+    border-color: var(--accent-1);
+    transform: translateY(-2px);
+  }
+  .theme-fab-m:active {
+    transform: scale(0.94);
+  }
+}
+
 .bottom-nav {
   display: none;
   position: fixed;
