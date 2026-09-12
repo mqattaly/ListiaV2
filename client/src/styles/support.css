@@ -40,6 +40,21 @@
   50% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
 }
 
+/* در موبایل حباب پشتیبانی بالای نوار پایین می‌نشیند تا روی «مدیریت» نیفتد */
+@media (max-width: 940px) {
+  .support-fab {
+    left: 14px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    width: 52px;
+    height: 52px;
+  }
+  .support-panel {
+    left: 12px;
+    bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+    height: min(540px, calc(100dvh - 230px));
+  }
+}
+
 .support-panel {
   position: fixed;
   left: 18px;
