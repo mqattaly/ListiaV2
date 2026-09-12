@@ -510,7 +510,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
       size="lg"
       icon={<Search size={19} />}
       title="جستجوی قیمت زنده"
-      subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب، باسلام و تداد بالا"}
+      subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب، باسلام و تعداد بالا"}
     >
       <form onSubmit={search} className="flex gap-8">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام کالا…" />
@@ -519,7 +519,7 @@ function PriceSearchModal({ state, onClose, onPick }) {
           <option value="digikala">دیجی‌کالا</option>
           <option value="torob">ترب</option>
           <option value="basalam">باسلام</option>
-          <option value="tedadbala">تداد بالا (عمده)</option>
+          <option value="tedadbala">تعداد بالا (عمده)</option>
         </select>
         <button className="btn btn-primary" type="submit" disabled={busy}>
           {busy ? <BtnSpinner size={15} /> : "جستجو"}
