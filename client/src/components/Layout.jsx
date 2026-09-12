@@ -28,6 +28,7 @@ import { initials } from "../format.js";
 import { AnimatedNumber } from "./bits.jsx";
 import PageErrorBoundary from "./ErrorBoundary.jsx";
 import FxBackdrop from "./FxBackdrop.jsx";
+import SupportChat from "./SupportChat.jsx";
 
 function AuroraBackground() {
   return (
@@ -335,6 +336,7 @@ export default function Layout() {
         </div>
         <BottomNav activeCount={activeCount} />
       </div>
+      <SupportChat />
     </>
   );
 }

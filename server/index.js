@@ -17,6 +17,7 @@ import appRoutes from "./routes/app.js";
 import accountRoutes from "./routes/account.js";
 import adminRoutes from "./routes/admin.js";
 import tokenRoutes from "./routes/token.js";
+import supportRoutes from "./routes/support.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -129,6 +130,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", requireAuth, appRoutes);
 app.use("/api/account", requireAuth, accountRoutes);
 app.use("/api/admin", requireAuth, adminRoutes);
+app.use("/api", requireAuth, supportRoutes);
 
 // ─── ساخت اولین مدیر در اجرای اول (اگر هیچ کاربری نبود) ────────────────────
 async function bootstrapAdmin() {
