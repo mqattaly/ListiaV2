@@ -50,7 +50,7 @@ export const PRICE_SOURCES = {
   },
   tedadbala: {
     id: "tedadbala",
-    label: "تداد بالا (عمده)",
+    label: "تعداد بالا (عمده)",
     domains: ["tedadbala.com"],
   },
 };
@@ -68,6 +68,9 @@ const SOURCE_ALIASES = {
   "تدادبالا": "tedadbala",
   "تداد بالا": "tedadbala",
   تداد: "tedadbala",
+  "تعدادبالا": "tedadbala",
+  "تعداد بالا": "tedadbala",
+  تعداد: "tedadbala",
 };
 
 function sourceForUrl(url) {
@@ -332,7 +335,7 @@ async function searchBasalam(query) {
     .filter(Boolean);
 }
 
-// تداد بالا: فروشگاه عمده‌فروشی روی ووکامرس — Store API عمومی (قیمت‌ها تومان)
+// تعداد بالا (تداد بالا): فروشگاه عمده‌فروشی روی ووکامرس — Store API عمومی (قیمت‌ها تومان)
 async function searchTedadbala(query) {
   const fields = "id,name,permalink,prices,price_html,images,is_in_stock,on_sale,type";
   // توجه: Store API مقدار orderby=relevance را نمی‌پذیرد؛ با وجود search خودش
@@ -468,7 +471,7 @@ export async function priceSearch(query, siteUrl = "", source = "") {
   if (siteUrl && !safeSite) throw new Error("آدرس سایت معتبر نیست.");
   const siteSource = safeSite ? sourceForUrl(safeSite) : null;
   if (safeSite && !siteSource) {
-    throw new Error("فقط دیجی‌کالا، ترب و باسلام پشتیبانی می‌شوند.");
+    throw new Error("فقط دیجی‌کالا، ترب، باسلام و تعداد بالا پشتیبانی می‌شوند.");
   }
 
   let selected = SOURCE_ALIASES[String(source ?? "").trim().toLowerCase()] ?? "";
