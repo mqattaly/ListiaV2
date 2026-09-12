@@ -1,6 +1,6 @@
 /* سرویس‌ورکر لیستیا — وب‌اپ iOS/اندروید
    پوسته‌ی اپ کش می‌شود تا آفلاین باز شود؛ APIها همیشه زنده‌اند. */
-const CACHE = "listia-shell-v2.1.0";
+const CACHE = "listia-shell-v2.2.0";
 const SHELL = ["/", "/manifest.webmanifest", "/favicon.png", "/logo-192.png", "/logo-512.png"];
 
 self.addEventListener("install", (event) => {

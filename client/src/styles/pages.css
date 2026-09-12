@@ -5,6 +5,7 @@
 /* ─── صفحه‌ی ورود/ثبت‌نام ──────────────────────────────────────────────────── */
 .auth-wrap {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 1.05fr 1fr;
 }
@@ -69,7 +70,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 24px;
+  /* در حالت تمام‌صفحه (اپ/PWA) کارت ورود زیر نوتیفیکیشن‌بار نرود */
+  padding: calc(40px + var(--safe-top)) 24px calc(40px + var(--safe-bottom));
 }
 .auth-card {
   width: 100%;

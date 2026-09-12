@@ -5,6 +5,7 @@
 .app-shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ─── ساید‌بار ─────────────────────────────────────────────────────────────── */
@@ -17,7 +18,9 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px;
+  /* ناحیه‌ی امن بالا/پایین: در حالت تمام‌صفحه، لوگو زیر نوتیفیکیشن‌بار و
+     کارت لایسنس زیر دکمه‌های ناوبری گوشی پنهان نشود */
+  padding: calc(20px + var(--safe-top)) 16px calc(20px + var(--safe-bottom));
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 40%, rgba(255, 255, 255, 0.04)),
     color-mix(in srgb, var(--bg-0) 55%, transparent);
@@ -180,6 +183,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .topbar {
@@ -189,7 +193,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 28px;
+  /* ‌safe-top: نوار بالا زیر نوتیفیکیشن‌بار نرود */
+  padding: calc(14px + var(--safe-top)) 28px 14px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)),
     color-mix(in srgb, var(--bg-0) 62%, transparent);
@@ -327,7 +332,9 @@
   z-index: 40;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  /* ناحیه‌ی امن بالا: در اپ/PWA تمام‌صفحه، نوتیفیکیشن‌بار روی همین نوار است؛
+     با این padding محتوای نوار (لوگو و عنوان) کامل دیده می‌شود */
+  padding: calc(12px + var(--safe-top)) 16px 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)),
     color-mix(in srgb, var(--bg-0) 68%, transparent);
@@ -341,15 +348,17 @@
   flex: 1;
 }
 
-/* دکمه‌ی تعویض تم — فقط موبایل؛ شناور بالای دکمه‌ی پشتیبانی (دسترس‌پذیر، نه چسبیده به بالای صفحه) */
+/* دکمه‌ی تعویض تم — فقط موبایل؛ شناور بالای دکمه‌ی پشتیبانی و بالای نوار پایین.
+   مختصات بر اساس ارتفاع واقعی نوار پایین (--bottom-nav-h) حساب می‌شود تا روی
+   دکمه‌های نوار (مثل «مدیریت» یا «لایسنس») نیفتد. */
 .theme-fab-m {
   display: none;
 }
 @media (max-width: 940px) {
   .theme-fab-m {
     position: fixed;
-    left: 20px;
-    bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+    left: calc(20px + var(--safe-left));
+    bottom: calc(var(--bottom-nav-h) + 72px);
     z-index: 299;
     width: 40px;
     height: 40px;
@@ -384,7 +393,7 @@
   right: 0;
   left: 0;
   z-index: 55;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  padding: 8px calc(10px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(10px + var(--safe-left));
   background:
     linear-gradient(0deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)),
     color-mix(in srgb, var(--bg-0) 70%, transparent);
@@ -441,7 +450,9 @@
   .mobile-topbar { display: flex; }
   .bottom-nav { display: flex; }
   .page-scroll {
-    padding: 18px 14px 100px;
+    /* ته صفحه به اندازه‌ی نوار پایین + حباب پشتیبانی + دکمه‌ی تم فاصله می‌گیرد
+       تا این دکمه‌های شناور روی محتوا (و دکمه‌های آخر صفحه) نیفتند */
+    padding: 18px 14px calc(var(--bottom-nav-h) + 128px);
   }
 }
 
