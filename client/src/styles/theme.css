@@ -220,6 +220,21 @@ h1, h2, h3, h4 {
   position: relative;
   transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
 }
+/* کارت‌هایی که خودشان لینک هستند (مثل کارت تأمین‌کننده) نباید ظاهر هایپرلینک بگیرند */
+a.card {
+  display: block;
+  color: var(--text-1);
+  text-decoration: none;
+}
+a.card:hover,
+a.card:focus-visible,
+a.card:active,
+a.card:visited {
+  color: var(--text-1);
+}
+a.card h1, a.card h2, a.card h3, a.card h4, a.card h5 {
+  color: var(--text-1);
+}
 [data-theme="light"] .glass,
 [data-theme="light"] .card {
   background:

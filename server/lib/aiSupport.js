@@ -1,14 +1,14 @@
 // ─── پشتیبانی هوش مصنوعی (درگاه چابکان، سازگار با OpenAI) ──────────────────
 // کلید فقط سمت سرور می‌ماند؛ کلاینت هرگز آن را نمی‌بیند. متغیرها:
 //   CHABOKAN_AI_API_KEY     کلید sk-chbk-... (الزامی برای فعال‌شدن ربات)
-//   CHABOKAN_AI_MODEL       شناسه مدل اصلی (پیش‌فرض gpt-oss-20b؛ تقریباً رایگان)
+//   CHABOKAN_AI_MODEL       شناسه مدل اصلی (پیش‌فرض chabok/free؛ رایگان)
 //   CHABOKAN_AI_MODEL_FALLBACK مدلی که اگر اصلی خطا داد خودکار جایگزین می‌شود
 //   CHABOKAN_AI_BASE_URL    پیش‌فرض https://ai.chabokan.net/v1
 const DEFAULT_BASE_URL = "https://ai.chabokan.net/v1";
-// gpt-oss-20b بهترین فارسی/دستورپذیری را در رده‌ی تقریباً رایگان دارد؛
-// gemma-4-31b کاملاً رایگان و به‌عنوان مدل پشتیبان تنظیم شده است.
-const DEFAULT_MODEL = "openai/gpt-oss-20b-free";
-const DEFAULT_FALLBACK_MODEL = "google/gemma-4-31b-it:free";
+// مدل رایگان رسمی چابکان به‌عنوان اصلی؛ gpt-oss-20b (تقریباً رایگان و فارسی خوب)
+// به‌عنوان مدل پشتیبان خودکار تنظیم شده است.
+const DEFAULT_MODEL = "chabok/free";
+const DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b-free";
 
 export function aiConfigured() {
   return Boolean(process.env.CHABOKAN_AI_API_KEY?.trim());

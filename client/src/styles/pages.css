@@ -639,7 +639,7 @@
   z-index: 400;
   width: 260px;
   pointer-events: none;
-  background: var(--surface-1, #fff);
+  background: var(--surface-3);
   border: 1px solid var(--border-2);
   border-radius: 16px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
@@ -1039,7 +1039,9 @@
   border-radius: 22px;
   padding: 26px 24px;
   border: 1px solid var(--border);
-  background: var(--surface-1);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.015) 42%, rgba(255, 255, 255, 0.045)),
+    var(--surface);
 }
 .lic-hero .lic-glow {
   position: absolute;
@@ -1051,18 +1053,18 @@
   border-color: rgba(245, 184, 77, 0.45);
   background:
     radial-gradient(120% 140% at 100% 0%, rgba(245, 184, 77, 0.16), transparent 60%),
-    var(--surface-1);
+    var(--surface);
 }
 .lic-free {
   background:
     radial-gradient(120% 140% at 100% 0%, rgba(20, 87, 196, 0.14), transparent 60%),
-    var(--surface-1);
+    var(--surface);
 }
 .lic-expired {
   border-color: rgba(239, 68, 68, 0.4);
   background:
     radial-gradient(120% 140% at 100% 0%, rgba(239, 68, 68, 0.13), transparent 60%),
-    var(--surface-1);
+    var(--surface);
 }
 .lic-hero-head {
   position: relative;
