@@ -1,10 +1,14 @@
 // ─── پشتیبانی هوش مصنوعی (درگاه چابکان، سازگار با OpenAI) ──────────────────
 // کلید فقط سمت سرور می‌ماند؛ کلاینت هرگز آن را نمی‌بیند. متغیرها:
-//   CHABOKAN_AI_API_KEY   کلید sk-chbk-... (الزامی برای فعال‌شدن ربات)
-//   CHABOKAN_AI_MODEL     شناسه مدل از پنل چابکان (پیش‌فرض openai/gpt-4o-mini)
-//   CHABOKAN_AI_BASE_URL  پیش‌فرض https://ai.chabokan.net/v1
+//   CHABOKAN_AI_API_KEY     کلید sk-chbk-... (الزامی برای فعال‌شدن ربات)
+//   CHABOKAN_AI_MODEL       شناسه مدل اصلی (پیش‌فرض gpt-oss-20b؛ تقریباً رایگان)
+//   CHABOKAN_AI_MODEL_FALLBACK مدلی که اگر اصلی خطا داد خودکار جایگزین می‌شود
+//   CHABOKAN_AI_BASE_URL    پیش‌فرض https://ai.chabokan.net/v1
 const DEFAULT_BASE_URL = "https://ai.chabokan.net/v1";
-const DEFAULT_MODEL = "openai/gpt-4o-mini";
+// gpt-oss-20b بهترین فارسی/دستورپذیری را در رده‌ی تقریباً رایگان دارد؛
+// gemma-4-31b کاملاً رایگان و به‌عنوان مدل پشتیبان تنظیم شده است.
+const DEFAULT_MODEL = "openai/gpt-oss-20b-free";
+const DEFAULT_FALLBACK_MODEL = "google/gemma-4-31b-it:free";
 
 export function aiConfigured() {
   return Boolean(process.env.CHABOKAN_AI_API_KEY?.trim());
@@ -12,6 +16,18 @@ export function aiConfigured() {
 
 export function aiModel() {
   return (process.env.CHABOKAN_AI_MODEL || DEFAULT_MODEL).trim();
+}
+
+// فهرست مدل‌ها به‌ترتیب اولویت (اصلی + پشتیبان). می‌توان با CHABOKAN_AI_MODELS
+// (با کاما) هم چند مدل دلخواه داد.
+export function aiModels() {
+  const raw = process.env.CHABOKAN_AI_MODELS?.trim();
+  if (raw) {
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  const primary = aiModel();
+  const fallback = (process.env.CHABOKAN_AI_MODEL_FALLBACK || DEFAULT_FALLBACK_MODEL).trim();
+  return fallback && fallback !== primary ? [primary, fallback] : [primary];
 }
 
 // ─── دانش‌نامه‌ی رسمی لیستیا (تنها مرجع پاسخ دستیار) ────────────────────────
@@ -158,63 +174,92 @@ export async function supportChat({ message = "", history = [] } = {}) {
   ];
 
   const baseUrl = (process.env.CHABOKAN_AI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const controller = new AbortController();
   const timeoutMs = Number(process.env.CHABOKAN_AI_TIMEOUT_MS || "30000");
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let res;
-  try {
-    res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${process.env.CHABOKAN_AI_API_KEY.trim()}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        model: aiModel(),
+  const temperature = Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3");
+  const models = aiModels();
+
+  // برای مدل‌های استدلالی (مثل gpt-oss) تلاش می‌کنیم بخش فکرکردن کوتاه بماند تا
+  // توکن/زمان بیخود مصرف نشود؛ پارامتر فقط برای همین مدل‌ها فرستاده می‌شود.
+  const callOnce = async (model) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res;
+    try {
+      const body = {
+        model,
         messages,
-        temperature: Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3"),
-        max_tokens: 700,
-      }),
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    if (err?.name === "AbortError") {
-      const e = new Error("پاسخ دستیار طول کشید؛ دوباره تلاش کنید.");
-      e.status = 504;
+        temperature,
+        max_tokens: 1000,
+      };
+      if (/gpt-oss/i.test(model)) body.reasoning_effort = "low";
+      res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${process.env.CHABOKAN_AI_API_KEY.trim()}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      const e = new Error(
+        err?.name === "AbortError"
+          ? "پاسخ دستیار طول کشید؛ دوباره تلاش کنید."
+          : "ارتباط با سرویس هوش مصنوعی برقرار نشد؛ کمی بعد دوباره تلاش کنید."
+      );
+      e.status = err?.name === "AbortError" ? 504 : 502;
+      e.retryable = true;
       throw e;
     }
-    const e = new Error("ارتباط با سرویس هوش مصنوعی برقرار نشد؛ کمی بعد دوباره تلاش کنید.");
-    e.status = 502;
-    throw e;
-  }
-  clearTimeout(timer);
+    clearTimeout(timer);
 
-  if (!res.ok) {
-    let detail = "";
-    try {
-      const body = await res.json();
-      detail = body?.error?.message || body?.message || "";
-    } catch {
-      /* پاسخ غیر JSON */
+    if (!res.ok) {
+      let detail = "";
+      try {
+        const b = await res.json();
+        detail = b?.error?.message || b?.message || "";
+      } catch {
+        /* پاسخ غیر JSON */
+      }
+      console.error(
+        `پشتیبانی AI: خطای ${res.status} از درگاه چابکان (مدل ${model})`,
+        detail ? `→ ${String(detail).slice(0, 200)}` : ""
+      );
+      const e = new Error(
+        res.status === 401 || res.status === 403
+          ? "کلید هوش مصنوعی پذیرفته نشد؛ لطفاً تنظیمات سرور را بررسی کنید."
+          : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
+      );
+      // مشکل کلید (۴۰۱/۴۰۳) با عوض‌شدن مدل حل نمی‌شود
+      e.status = res.status === 401 || res.status === 403 ? res.status : 502;
+      e.retryable = !(res.status === 401 || res.status === 403);
+      throw e;
     }
-    console.error(`پشتیبانی AI: خطای ${res.status} از درگاه چابکان`, detail ? `→ ${String(detail).slice(0, 200)}` : "");
-    const e = new Error(
-      res.status === 401 || res.status === 403
-        ? "کلید هوش مصنوعی پذیرفته نشد؛ لطفاً تنظیمات سرور را بررسی کنید."
-        : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
-    );
-    e.status = 502;
-    throw e;
-  }
 
-  const body = await res.json().catch(() => null);
-  const reply = body?.choices?.[0]?.message?.content?.toString().trim();
-  if (!reply) {
-    const e = new Error("پاسخی از دستیار دریافت نشد؛ دوباره تلاش کنید.");
-    e.status = 502;
-    throw e;
+    const b = await res.json().catch(() => null);
+    const reply = b?.choices?.[0]?.message?.content?.toString().trim();
+    if (!reply) {
+      const e = new Error("پاسخی از دستیار دریافت نشد؛ دوباره تلاش کنید.");
+      e.status = 502;
+      e.retryable = true;
+      throw e;
+    }
+    return reply.slice(0, 4000);
+  };
+
+  // مدل اصلی و در صورت خطای موقت، مدل(های) پشتیبان
+  let lastErr;
+  for (let i = 0; i < models.length; i++) {
+    try {
+      const reply = await callOnce(models[i]);
+      if (i > 0) console.log(`پشتیبانی AI: مدل پشتیبان ${models[i]} پاسخ داد.`);
+      return { reply };
+    } catch (err) {
+      lastErr = err;
+      if (!err.retryable) break;
+    }
   }
-  return { reply: reply.slice(0, 4000) };
+  throw lastErr;
 }

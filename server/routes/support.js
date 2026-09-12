@@ -1,6 +1,6 @@
 // ─── پشتیبانی هوش مصنوعی (چت‌بات چابکان) ───────────────────────────────────
 import { Router } from "express";
-import { aiConfigured, aiModel, supportChat } from "../lib/aiSupport.js";
+import { aiConfigured, aiModels, supportChat } from "../lib/aiSupport.js";
 import { rateCheck, tooMany, requestIP } from "../lib/auth.js";
 
 const router = Router();
@@ -8,7 +8,13 @@ const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch
 
 // وضعیت فعال‌بودن دستیار (فرانت قبل از باز کردن پنل چک می‌کند)
 router.get("/support/status", (req, res) => {
-  res.json({ success: true, enabled: aiConfigured(), model: aiConfigured() ? aiModel() : null });
+  const models = aiConfigured() ? aiModels() : [];
+  res.json({
+    success: true,
+    enabled: aiConfigured(),
+    model: models[0] || null,
+    fallback_model: models[1] || null,
+  });
 });
 
 // گفتگو: { message, history: [{role, content}, ...] }
