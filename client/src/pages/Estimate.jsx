@@ -463,7 +463,6 @@ const JOB_KEY = "listia-price-job";
 
 function PriceSearchModal({ state, onClose, onPick }) {
   const [q, setQ] = useState("");
-  const [source, setSource] = useState("");
   const [job, setJob] = useState(() => {
     try {
       return localStorage.getItem(JOB_KEY) || "";
@@ -471,8 +470,6 @@ function PriceSearchModal({ state, onClose, onPick }) {
       return "";
     }
   });
-  const [usedQueries, setUsedQueries] = useState([]);
-  const [smartOn, setSmartOn] = useState(false);
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -495,8 +492,6 @@ function PriceSearchModal({ state, onClose, onPick }) {
       setError("");
       setZoom(null);
       setLightbox(null);
-      setUsedQueries([]);
-      setSmartOn(false);
     }
   }, [state]);
 
@@ -529,19 +524,14 @@ function PriceSearchModal({ state, onClose, onPick }) {
     setError("");
     setResults(null);
     setZoom(null);
-    setUsedQueries([]);
-    setSmartOn(false);
     try {
-      const useSmart = job.trim().length >= 2;
-      const url = useSmart
-        ? `/api/estimate/search-smart?q=${encodeURIComponent(q.trim())}&job=${encodeURIComponent(job.trim())}`
-        : `/api/estimate/search?q=${encodeURIComponent(q.trim())}${source ? `&source=${source}` : ""}`;
-      const data = await api.get(url);
+      // جستجو کاملاً با هوش مصنوعی است: AI خودش در اینترنت می‌گردد و سایت‌ها را
+      // (با شغلِ کاربر) خودش انتخاب می‌کند — ممکن است تا یک دقیقه طول بکشد.
+      const url = `/api/estimate/search?q=${encodeURIComponent(q.trim())}&job=${encodeURIComponent(job.trim())}`;
+      const data = await api.get(url, { timeout: 120_000 });
       setResults(data);
-      setSmartOn(Boolean(useSmart && data.smart));
-      if (useSmart) setUsedQueries(data.queries || [q.trim()]);
       if (!data.results?.length && data.errors?.length) {
-        setError("از هیچ منبعی نتیجه‌ای نرسید: " + data.errors.slice(0, 2).join(" · "));
+        setError(data.errors.slice(0, 2).join(" · "));
       }
     } catch (err) {
       setError(err.message);
@@ -560,31 +550,21 @@ function PriceSearchModal({ state, onClose, onPick }) {
       size="lg"
       icon={<Search size={19} />}
       title="جستجوی قیمت زنده"
-      subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب، باسلام و تعداد بالا"}
+      subtitle={
+        state?.product
+          ? `برای «${state.product.product_name}» — قیمت‌ها را هوش مصنوعی از اینترنت پیدا می‌کند`
+          : "هوش مصنوعی قیمت‌های زنده را از اینترنت جستجو می‌کند"
+      }
     >
       <form onSubmit={search}>
         <div className="flex gap-8 ps-formrow">
           <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام کالا… (مثلاً: تی حوله‌ای)" />
-          <select
-            className="select"
-            style={{ maxWidth: 170 }}
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            disabled={job.trim().length >= 2}
-            title={job.trim().length >= 2 ? "وقتی شغل انتخاب شده، هوش مصنوعی منابع را خودش انتخاب می‌کند" : ""}
-          >
-            <option value="">همه‌ی منابع</option>
-            <option value="digikala">دیجی‌کالا</option>
-            <option value="torob">ترب</option>
-            <option value="basalam">باسلام</option>
-            <option value="tedadbala">تعداد بالا (عمده)</option>
-          </select>
           <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? <BtnSpinner size={15} /> : job.trim().length >= 2 ? <><Sparkles size={14} /> جستجوی هوشمند</> : "جستجو"}
+            {busy ? <BtnSpinner size={15} /> : <><Sparkles size={14} /> جستجوی هوشمند</>}
           </button>
         </div>
 
-        {/* جستجوی شغل‌محور: AI گونه‌ی حرفه‌ای/صنعتیِ همین کالا را در منابع مناسب می‌گردد */}
+        {/* شغل: AI سایت‌های مناسب را بر اساس همان حرفه انتخاب می‌کند */}
         <div className="ps-jobrow">
           <span className="ps-jobico" title="جستجوی هوشمند بر اساس شغل">
             <Sparkles size={13} />
@@ -593,15 +573,12 @@ function PriceSearchModal({ state, onClose, onPick }) {
             className="input"
             list="listia-job-presets"
             value={job}
-            onChange={(e) => {
-              setJob(e.target.value);
-              if (e.target.value.trim().length < 2) setSource("");
-            }}
-            placeholder="شغل خود را بنویسید تا جستجو حرفه‌ای شود (مثلاً: خدمات نظافت) — خالی بگذارید برای جستجوی عادی"
+            onChange={(e) => setJob(e.target.value)}
+            placeholder="شغل خود را بنویسید تا هوش مصنوعی سایت‌های مناسب را انتخاب کند (مثلاً: خدمات نظافت) — اختیاری"
             style={{ flex: 1 }}
           />
           {job.trim() && (
-            <button type="button" className="btn btn-sm" onClick={() => setJob("")} title="حذف شغل و جستجوی عادی">
+            <button type="button" className="btn btn-sm" onClick={() => setJob("")} title="حذف شغل">
               حذف شغل
             </button>
           )}
@@ -611,24 +588,12 @@ function PriceSearchModal({ state, onClose, onPick }) {
             ))}
           </datalist>
         </div>
-        {job.trim().length >= 2 && (
-          <p className="ps-jobhint">
-            هوش مصنوعی عبارت «{q.trim() || "کالا"}» را متناسب با شغل «{job.trim()}» بازنویسی می‌کند و خودش
-            دیجی‌کالا، ترب، باسلام یا تعداد بالا را برمی‌گزیند.
-          </p>
-        )}
+        <p className="ps-jobhint">
+          {job.trim().length >= 2
+            ? `هوش مصنوعی بر اساس شغل «${job.trim()}» سایت‌های مناسب را خودش انتخاب می‌کند و قیمت‌های زنده را از اینترنت می‌آورد.`
+            : "هوش مصنوعی قیمت‌ها را زنده از سایت‌های آنلاین پیدا می‌کند؛ این جستجو ممکن است ۱۰ تا ۶۰ ثانیه طول بکشد."}
+        </p>
       </form>
-
-      {smartOn && usedQueries.length > 1 && (
-        <div className="ps-queries">
-          <Sparkles size={12} />
-          {usedQueries.map((u, i) => (
-            <span key={i} className="badge">
-              {u}
-            </span>
-          ))}
-        </div>
-      )}
 
       {error && (
         <div className="auth-alert err" style={{ marginBottom: 0 }}>
@@ -650,7 +615,10 @@ function PriceSearchModal({ state, onClose, onPick }) {
             </div>
           )}
           {results.results.length === 0 && !error && (
-            <EmptyState title="قیمتی پیدا نشد" text="عبارت را کلی‌تر بنویسید یا منبع دیگری را امتحان کنید." />
+            <EmptyState
+              title="قیمتی پیدا نشد"
+              text="عبارت را کوتاه‌تر و رایج‌تر بنویسید و چند لحظه بعد دوباره تلاش کنید."
+            />
           )}
           {results.results.length > 0 && (
             <StaggerList style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "46vh", overflowY: "auto", paddingLeft: 4 }}>

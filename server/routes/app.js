@@ -44,7 +44,6 @@ import {
   unarchiveProduct,
 } from "../lib/queries.js";
 import { importRows } from "../lib/importer.js";
-import { priceSearch } from "../lib/priceSearch.js";
 import { smartPriceSearch } from "../lib/aiPriceSearch.js";
 import { rateCheck, tooMany, requestIP } from "../lib/auth.js";
 
@@ -682,23 +681,11 @@ router.post("/estimate/trim-to-budget", (req, res) => {
   res.json(out);
 });
 
-router.get("/estimate/search", ah(async (req, res) => {
-  const query = String(req.query.q ?? req.query.query ?? "").trim();
-  const site = String(req.query.url ?? req.query.site ?? "").trim();
-  const source = String(req.query.source ?? "").trim();
-  if (!query) return jsonError(res, "عبارت جستجو را وارد کنید.");
-  try {
-    const data = await priceSearch(query, site, source);
-    res.json({ success: true, ...data });
-  } catch (err) {
-    return jsonError(res, err.message);
-  }
-}));
-
-// جستجوی قیمت هوشمند شغل‌محور: AI عبارت را حرفه‌ای/صنعتیِ همان شغل بازنویسی
-// و منابع مناسب را انتخاب می‌کند، بعد سرور در سایت‌ها می‌گردد. اگر AI فعال
-// نباشد یا خطا بدهد، خروجی دقیقاً مثل جستجوی عادی همه‌ی منابع برمی‌گردد.
-router.get("/estimate/search-smart", ah(async (req, res) => {
+// جستجوی قیمت زنده — کاملاً با هوش مصنوعی: AI خودش در اینترنت می‌گردد،
+// سایت‌های مناسب را (بر اساس شغلِ کاربر) انتخاب می‌کند و چند قیمت واقعی
+// با لینک برمی‌گرداند. منطق قیمت صفحه‌ی برآورد (تبدیل/تقسیم بر تعداد) جدا
+// از این جستجو و بدون تغییر کار می‌کند.
+const estimateSearchHandler = ah(async (req, res) => {
   const query = String(req.query.q ?? req.query.query ?? "").trim();
   const job = String(req.query.job ?? "").trim();
   if (!query) return jsonError(res, "عبارت جستجو را وارد کنید.");
@@ -715,7 +702,11 @@ router.get("/estimate/search-smart", ah(async (req, res) => {
   } catch (err) {
     return jsonError(res, err.message, err.status || 502);
   }
-}));
+});
+
+router.get("/estimate/search", estimateSearchHandler);
+// مسیر قدیمی — برای سازگاری با نسخه‌های پیشینِ اپ (محتوا یکسان است)
+router.get("/estimate/search-smart", estimateSearchHandler);
 
 // ─── ایمپورت ────────────────────────────────────────────────────────────────
 router.post(
