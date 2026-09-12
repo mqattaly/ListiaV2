@@ -208,8 +208,35 @@ function Sidebar({ activeCount }) {
 
 function BottomNav({ activeCount }) {
   const { user } = useApp();
+  const navRef = useRef(null);
+
+  // ارتفاع واقعی نوار پایین (وابسته به فونت گوشی و نوار ناوبری سیستم) در متغیر
+  // CSS --bottom-nav-h ریخته می‌شود تا حباب پشتیبانی و دکمه‌ی تم دقیقاً بالای
+  // نوار بنشینند و هیچ‌وقت روی دکمه‌های آن (مثل «مدیریت»/«لایسنس») نیفتند.
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return undefined;
+    const apply = () => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      if (h > 0) document.documentElement.style.setProperty("--bottom-nav-h", `${h}px`);
+    };
+    apply();
+    let ro;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(apply);
+      ro.observe(el);
+    }
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+
   return (
-    <nav className="bottom-nav">
+    <nav className="bottom-nav" ref={navRef}>
       <NavLink to="/" end className="bn-item">
         {({ isActive }) => (
           <>

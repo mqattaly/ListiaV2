@@ -39,6 +39,17 @@
   --font: "Vazir", "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
   --mono: "Vazir", "Vazirmatn", "PlexMono", monospace;
   --sidebar-w: 264px;
+  /* ─── ناحیه‌ی امنِ سیستم (نوار وضعیت/نوتیفیکیشن و نوار ناوبری گوشی) ───────
+     در حالت تمام‌صفحه (PWA نصب‌شده یا WebView اپ اندروید) صفحه زیر نوارهای
+     سیستم می‌رود؛ این متغیرها از خودِ سیستم خوانده می‌شوند تا هیچ‌چیز زیر
+     نوتیفیکیشن‌بار یا دکمه‌های ناوبری پنهان نشود. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  /* ارتفاع واقعی نوار پایین موبایل — در Layout.jsx اندازه‌گیری و به‌روز می‌شود
+     (با فونت بزرگ‌ترِ گوشی یا نوار سیستمی، ارتفاع نوار تغییر می‌کند) */
+  --bottom-nav-h: 68px;
   color-scheme: dark;
 }
 
@@ -82,7 +93,10 @@ body {
 }
 
 #root {
+  /* در مرورگرهای موبایل ۱۰۰vh بلندتر از صفحه‌ی دیدنی است (نوار آدرس) و
+     اسکرول اضافه می‌سازد؛ ۱۰۰dvh دقیقاً همان ارتفاع قابل‌مشاهده است */
   min-height: 100vh;
+  min-height: 100dvh;
   isolation: isolate;
 }
 
