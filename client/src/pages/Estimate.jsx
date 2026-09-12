@@ -20,15 +20,13 @@ import { useApp } from "../context/AppContext.jsx";
 import { fmtAmount, fmtShort } from "../format.js";
 import { BtnSpinner, EmptyState, SkeletonRows, StaggerItem, StaggerList } from "../components/bits.jsx";
 import Modal from "../components/Modal.jsx";
-import JobEstimateModal from "../components/JobEstimateModal.jsx";
 
 export default function Estimate() {
   const { toast, confirm } = useApp();
   const [snap, setSnap] = useState(null);
   const [filter, setFilter] = useState("");
   const [budgetInput, setBudgetInput] = useState("");
-  const [priceModal, setPriceModal] = useState(null); // {product} یا {query}
-  const [jobModal, setJobModal] = useState(false);
+  const [priceModal, setPriceModal] = useState(null); // {product}
   const [savingItem, setSavingItem] = useState(null);
   const [budgetBusy, setBudgetBusy] = useState(false);
   const [trimBusy, setTrimBusy] = useState(false);
@@ -183,9 +181,6 @@ export default function Estimate() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-primary" onClick={() => setJobModal(true)} title="هوش مصنوعی بر اساس شغلت فهرست اقلام و قیمت‌های بازار را آماده می‌کند">
-            <Sparkles size={16} /> برآورد هوشمند شغل
-          </button>
           <select className="select" style={{ width: 190 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">همه‌ی تأمین‌کننده‌ها</option>
             {snap.suppliers.map((s) => (
@@ -436,37 +431,59 @@ export default function Estimate() {
         onClose={() => setPriceModal(null)}
         onPick={(product, result) => {
           setPriceModal(null);
-          if (!product) return;
           // قیمت + لینک صفحه‌ی همان نتیجه با هم ذخیره می‌شوند
           saveItemField(product, { unit_price: String(result.price), price_url: result.url || "" });
           toast(`قیمت ${fmtAmount(result.price)} برای «${product.product_name}» ثبت شد`, "success");
         }}
       />
-
-      {/* ─── مودال برآورد هوشمند شغل ─── */}
-      <JobEstimateModal
-        open={jobModal}
-        onClose={() => setJobModal(false)}
-        suppliers={snap.suppliers}
-        supplierId={filter}
-        onImported={(d) => {
-          setSnap(d);
-          toast(d.message || "اقلام به لیست افزوده شد", "success", 5200);
-          load(filter);
-        }}
-        onManualSearch={(name) => setPriceModal({ query: name })}
-      />
     </div>
   );
 }
 
+const JOB_PRESETS = [
+  "خدمات نظافت و نظافتچی",
+  "کافی‌شاپ",
+  "رستوران",
+  "قنادی",
+  "آرایشگاه",
+  "مکانیکی",
+  "تعمیرات موبایل",
+  "خیاطی",
+  "گل‌فروشی",
+  "سوپرمارکت",
+  "نانوایی",
+  "خشکشویی",
+  "باغبانی و فضای سبز",
+  "ساختمان و نقاشی ساختمان",
+  "دفتر کار",
+];
+const JOB_KEY = "listia-price-job";
+
 function PriceSearchModal({ state, onClose, onPick }) {
   const [q, setQ] = useState("");
   const [source, setSource] = useState("");
+  const [job, setJob] = useState(() => {
+    try {
+      return localStorage.getItem(JOB_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [usedQueries, setUsedQueries] = useState([]);
+  const [smartOn, setSmartOn] = useState(false);
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [zoom, setZoom] = useState(null); // { image, title, x, y }
+
+  useEffect(() => {
+    try {
+      if (job.trim()) localStorage.setItem(JOB_KEY, job.trim());
+      else localStorage.removeItem(JOB_KEY);
+    } catch {
+      /* ذخیره‌سازی در دسترس نیست */
+    }
+  }, [job]);
 
   useEffect(() => {
     if (state?.product) {
@@ -474,12 +491,8 @@ function PriceSearchModal({ state, onClose, onPick }) {
       setResults(null);
       setError("");
       setZoom(null);
-    } else if (state?.query) {
-      // حالت جستجوی دستی (از برآورد هوشمند شغلی): بدون محصول مقصد، فقط جست‌وجو
-      setQ(state.query);
-      setResults(null);
-      setError("");
-      setZoom(null);
+      setUsedQueries([]);
+      setSmartOn(false);
     }
   }, [state]);
 
@@ -512,11 +525,17 @@ function PriceSearchModal({ state, onClose, onPick }) {
     setError("");
     setResults(null);
     setZoom(null);
+    setUsedQueries([]);
+    setSmartOn(false);
     try {
-      const data = await api.get(
-        `/api/estimate/search?q=${encodeURIComponent(q.trim())}${source ? `&source=${source}` : ""}`
-      );
+      const useSmart = job.trim().length >= 2;
+      const url = useSmart
+        ? `/api/estimate/search-smart?q=${encodeURIComponent(q.trim())}&job=${encodeURIComponent(job.trim())}`
+        : `/api/estimate/search?q=${encodeURIComponent(q.trim())}${source ? `&source=${source}` : ""}`;
+      const data = await api.get(url);
       setResults(data);
+      setSmartOn(Boolean(useSmart && data.smart));
+      if (useSmart) setUsedQueries(data.queries || [q.trim()]);
       if (!data.results?.length && data.errors?.length) {
         setError("از هیچ منبعی نتیجه‌ای نرسید: " + data.errors.slice(0, 2).join(" · "));
       }
@@ -539,19 +558,73 @@ function PriceSearchModal({ state, onClose, onPick }) {
       title="جستجوی قیمت زنده"
       subtitle={state?.product ? `برای «${state.product.product_name}»` : "از دیجی‌کالا، ترب، باسلام و تعداد بالا"}
     >
-      <form onSubmit={search} className="flex gap-8">
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام کالا…" />
-        <select className="select" style={{ maxWidth: 170 }} value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="">همه‌ی منابع</option>
-          <option value="digikala">دیجی‌کالا</option>
-          <option value="torob">ترب</option>
-          <option value="basalam">باسلام</option>
-          <option value="tedadbala">تعداد بالا (عمده)</option>
-        </select>
-        <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? <BtnSpinner size={15} /> : "جستجو"}
-        </button>
+      <form onSubmit={search}>
+        <div className="flex gap-8">
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام کالا… (مثلاً: تی حوله‌ای)" />
+          <select
+            className="select"
+            style={{ maxWidth: 170 }}
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            disabled={job.trim().length >= 2}
+            title={job.trim().length >= 2 ? "وقتی شغل انتخاب شده، هوش مصنوعی منابع را خودش انتخاب می‌کند" : ""}
+          >
+            <option value="">همه‌ی منابع</option>
+            <option value="digikala">دیجی‌کالا</option>
+            <option value="torob">ترب</option>
+            <option value="basalam">باسلام</option>
+            <option value="tedadbala">تعداد بالا (عمده)</option>
+          </select>
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? <BtnSpinner size={15} /> : job.trim().length >= 2 ? <><Sparkles size={14} /> جستجوی هوشمند</> : "جستجو"}
+          </button>
+        </div>
+
+        {/* جستجوی شغل‌محور: AI گونه‌ی حرفه‌ای/صنعتیِ همین کالا را در منابع مناسب می‌گردد */}
+        <div className="ps-jobrow">
+          <span className="ps-jobico" title="جستجوی هوشمند بر اساس شغل">
+            <Sparkles size={13} />
+          </span>
+          <input
+            className="input"
+            list="listia-job-presets"
+            value={job}
+            onChange={(e) => {
+              setJob(e.target.value);
+              if (e.target.value.trim().length < 2) setSource("");
+            }}
+            placeholder="شغل خود را بنویسید تا جستجو حرفه‌ای شود (مثلاً: خدمات نظافت) — خالی بگذارید برای جستجوی عادی"
+            style={{ flex: 1 }}
+          />
+          {job.trim() && (
+            <button type="button" className="btn btn-sm" onClick={() => setJob("")} title="حذف شغل و جستجوی عادی">
+              حذف شغل
+            </button>
+          )}
+          <datalist id="listia-job-presets">
+            {JOB_PRESETS.map((j) => (
+              <option key={j} value={j} />
+            ))}
+          </datalist>
+        </div>
+        {job.trim().length >= 2 && (
+          <p className="ps-jobhint">
+            هوش مصنوعی عبارت «{q.trim() || "کالا"}» را متناسب با شغل «{job.trim()}» بازنویسی می‌کند و خودش
+            دیجی‌کالا، ترب، باسلام یا تعداد بالا را برمی‌گزیند.
+          </p>
+        )}
       </form>
+
+      {smartOn && usedQueries.length > 1 && (
+        <div className="ps-queries">
+          <Sparkles size={12} />
+          {usedQueries.map((u, i) => (
+            <span key={i} className="badge">
+              {u}
+            </span>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="auth-alert err" style={{ marginBottom: 0 }}>
@@ -610,15 +683,9 @@ function PriceSearchModal({ state, onClose, onPick }) {
                     </div>
                     <div style={{ textAlign: "left" }}>
                       <div className="prc-price">{r.price_label}</div>
-                      {state.product ? (
-                        <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }} onClick={() => onPick(state.product, r)}>
-                          انتخاب قیمت
-                        </button>
-                      ) : (
-                        <a className="btn btn-sm" style={{ marginTop: 6 }} href={r.url} target="_blank" rel="noreferrer">
-                          مشاهده فروشنده <ExternalLink size={12} />
-                        </a>
-                      )}
+                      <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }} onClick={() => onPick(state.product, r)}>
+                        انتخاب قیمت
+                      </button>
                     </div>
                   </div>
                 </StaggerItem>

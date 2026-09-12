@@ -21,7 +21,6 @@ import {
   shamsiLabel,
   todayISO,
   clampText,
-  normalizeName,
 } from "../lib/utils.js";
 import {
   userSuppliers,
@@ -46,7 +45,7 @@ import {
 } from "../lib/queries.js";
 import { importRows } from "../lib/importer.js";
 import { priceSearch } from "../lib/priceSearch.js";
-import { buildJobPlan, pricePlanItems, sanitizePlanItems, JOB_MAX_ITEMS } from "../lib/aiEstimate.js";
+import { smartPriceSearch } from "../lib/aiPriceSearch.js";
 import { rateCheck, tooMany, requestIP } from "../lib/auth.js";
 
 const router = Router();
@@ -696,150 +695,27 @@ router.get("/estimate/search", ah(async (req, res) => {
   }
 }));
 
-// ─── برآورد هوشمند بر اساس شغل (AI فهرست می‌سازد، سرور قیمت می‌گیرد) ─────────
-// مرحله ۱: ساخت فهرست اقلام با هوش مصنوعی
-router.post(
-  "/estimate/ai-plan",
-  ah(async (req, res) => {
-    const ip = requestIP(req);
-    if (
-      !rateCheck("aijob-plan", `u:${req.user.id}`, 8, 60_000) ||
-      !rateCheck("aijob-plan", `ip:${ip}`, 20, 60_000)
-    ) {
-      return tooMany(res, "تعداد درخواست‌ها در این دقیقه زیاد است؛ کمی بعد دوباره تلاش کنید.");
-    }
-    const body = req.body ?? {};
-    try {
-      const plan = await buildJobPlan({ job: body.job ?? body.title ?? "", note: body.note ?? "" });
-      res.json({ success: true, ...plan });
-    } catch (err) {
-      return jsonError(res, err.message, err.status || 502);
-    }
-  })
-);
-
-// مرحله ۲: جستجوی واقعی قیمت برای همه‌ی اقلام فهرست (بدون هزینه AI؛ خطای قلم ایزوله)
-router.post(
-  "/estimate/ai-price",
-  ah(async (req, res) => {
-    const ip = requestIP(req);
-    if (
-      !rateCheck("aijob-price", `u:${req.user.id}`, 12, 60_000) ||
-      !rateCheck("aijob-price", `ip:${ip}`, 30, 60_000)
-    ) {
-      return tooMany(res, "تعداد جستجوها در این دقیقه زیاد است؛ کمی بعد دوباره تلاش کنید.");
-    }
-    const body = req.body ?? {};
-    const items = sanitizePlanItems(body.items);
-    if (!items.length) return jsonError(res, "فهرست اقلام معتبر نیست.");
-    const rows = await pricePlanItems(items);
-    const total = rows.reduce((sum, r) => sum + r.row_total, 0);
-    res.json({
-      success: true,
-      rows,
-      total,
-      priced_count: rows.filter((r) => r.status === "priced").length,
-      total_count: rows.length,
-    });
-  })
-);
-
-// مرحله ۳: افزودن گروهی اقلام قیمت‌گذاری‌شده به لیست خرید یک تأمین‌کننده
-router.post(
-  "/estimate/ai-import",
-  ah(async (req, res) => {
-    const body = req.body ?? {};
-    const limits = getUserLimits(req.user);
-    const lockError = requireLicenseForProduct(res, limits);
-    if (lockError) return lockError;
-
-    const sid = Number(body.supplier_id);
-    if (!Number.isInteger(sid)) return jsonError(res, "تأمین‌کننده معتبر نیست.");
-    const ownerIds = accessibleOwnerIds(req.user.id);
-    const supplier = ownerIds.length
-      ? get(
-          `SELECT * FROM suppliers WHERE id = ? AND owner_id IN (${ownerIds.map(() => "?").join(",")})`,
-          sid,
-          ...ownerIds
-        )
-      : null;
-    if (!supplier) return jsonError(res, "تأمین‌کننده معتبر نیست.");
-
-    const rawRows = Array.isArray(body.items) ? body.items.slice(0, JOB_MAX_ITEMS) : [];
-    if (!rawRows.length) return jsonError(res, "قلمی برای افزودن نیست.");
-
-    const productOwnerId = supplier.owner_id || req.user.id;
-    // تطبیق نام نرمال‌شده با اقلام فعالِ همین تأمین‌کننده (جلوگیری از تکرار)
-    const existingList = all("SELECT * FROM products WHERE supplier_id = ? AND ordered = 0", sid);
-    const existingMap = new Map(existingList.map((p) => [normalizeName(p.product_name), p]));
-
-    const created = [];
-    const updated = [];
-    const skipped = [];
-
-    for (const row of rawRows) {
-      const name = clampText(row.name ?? row.product_name ?? "", 300);
-      if (!name || name.trim().length < 2) {
-        skipped.push({ name: String(row.name ?? "").slice(0, 80), reason: "نام نامعتبر" });
-        continue;
-      }
-      let qty = Math.round(Number(row.qty ?? row.quantity) || 1);
-      if (!Number.isFinite(qty) || qty < 1) qty = 1;
-      qty = Math.min(qty, 50);
-      const unit = UNIT_TYPES.includes(row.unit) ? row.unit : "عدد";
-      const priceNum = Number(row.price);
-      const unitPrice = Number.isFinite(priceNum) && priceNum > 0 ? String(Math.round(priceNum)) : null;
-      const url = (safeHttpUrl(row.url ?? row.price_url ?? "") || "").slice(0, 500);
-
-      const existing = existingMap.get(normalizeName(name));
-      if (existing) {
-        run(
-          `UPDATE products SET
-             unit_price = COALESCE(?, unit_price),
-             price_url = CASE WHEN ? <> '' THEN ? ELSE price_url END
-           WHERE id = ?`,
-          unitPrice,
-          url,
-          url,
-          existing.id
-        );
-        updated.push({ id: existing.id, name: existing.product_name });
-        continue;
-      }
-
-      // سقف لایسنسِ صاحب تأمین‌کننده برای هر قلم جدید بررسی می‌شود
-      const ownerUser = productOwnerId === req.user.id ? req.user : getUserById(productOwnerId);
-      const ownerLimits = getUserLimits(ownerUser);
-      if (!ownerLimits.can_add_product) {
-        skipped.push({ name, reason: "سقف لایسنس پر است" });
-        continue;
-      }
-
-      const info = run(
-        `INSERT INTO products (owner_id, supplier_id, product_name, quantity, unit, description, unit_price, price_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        productOwnerId,
-        sid,
-        name.trim(),
-        String(qty),
-        unit,
-        "",
-        unitPrice,
-        url
-      );
-      const newId = Number(info.lastInsertRowid);
-      created.push({ id: newId, name: name.trim(), price: unitPrice ? Number(unitPrice) : null });
-      existingMap.set(normalizeName(name), { id: newId, product_name: name.trim() });
-    }
-
-    const snapshot = estimateSnapshot(req.user.id, sid);
-    const message =
-      `${created.length} قلم جدید افزوده شد` +
-      (updated.length ? ` و قیمت ${updated.length} قلم موجود به‌روز شد` : "") +
-      (skipped.length ? `؛ ${skipped.length} قلم رد شد.` : ".");
-    res.json({ success: true, message, created, updated, skipped, ...snapshot });
-  })
-);
+// جستجوی قیمت هوشمند شغل‌محور: AI عبارت را حرفه‌ای/صنعتیِ همان شغل بازنویسی
+// و منابع مناسب را انتخاب می‌کند، بعد سرور در سایت‌ها می‌گردد. اگر AI فعال
+// نباشد یا خطا بدهد، خروجی دقیقاً مثل جستجوی عادی همه‌ی منابع برمی‌گردد.
+router.get("/estimate/search-smart", ah(async (req, res) => {
+  const query = String(req.query.q ?? req.query.query ?? "").trim();
+  const job = String(req.query.job ?? "").trim();
+  if (!query) return jsonError(res, "عبارت جستجو را وارد کنید.");
+  const ip = requestIP(req);
+  if (
+    !rateCheck("aismartsearch", `u:${req.user.id}`, 25, 60_000) ||
+    !rateCheck("aismartsearch", `ip:${ip}`, 60, 60_000)
+  ) {
+    return tooMany(res, "تعداد جستجوها در این دقیقه زیاد است؛ کمی بعد دوباره تلاش کنید.");
+  }
+  try {
+    const data = await smartPriceSearch({ job, query });
+    res.json({ success: true, ...data });
+  } catch (err) {
+    return jsonError(res, err.message, err.status || 502);
+  }
+}));
 
 // ─── ایمپورت ────────────────────────────────────────────────────────────────
 router.post(
