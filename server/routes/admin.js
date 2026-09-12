@@ -23,6 +23,8 @@ import { adminUserPayload } from "../lib/serialize.js";
 
 const router = Router();
 
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 function jsonError(res, message, status = 400, extra = null) {
   return res.status(status).json({ success: false, message, ...(extra ?? {}) });
 }
@@ -58,27 +60,55 @@ function refreshLicenseKey(user) {
   return key;
 }
 
-// ─── GET /api/admin/users ────────────────────────────────────────────────────
+// ─── GET /api/admin/users (با جستجو و صفحه‌بندی) ─────────────────────────────
 router.get("/users", (req, res) => {
-  const users = all("SELECT * FROM users ORDER BY id DESC");
-  const supplierCounts = Object.fromEntries(
-    all("SELECT owner_id, COUNT(*) AS n FROM suppliers GROUP BY owner_id").map((r) => [r.owner_id, r.n])
+  const pageSize = Math.min(Math.max(parseInt(req.query.page_size ?? "50", 10) || 50, 10), 200);
+  const page = Math.max(parseInt(req.query.page ?? "1", 10) || 1, 1);
+  const q = String(req.query.q ?? "").trim();
+  const params = [];
+  let where = "";
+  if (q) {
+    where = `WHERE lower(username) LIKE lower(?) OR lower(first_name) LIKE lower(?)
+             OR lower(last_name) LIKE lower(?) OR lower(email) LIKE lower(?)`;
+    const like = `%${q.slice(0, 100)}%`;
+    params.push(like, like, like, like);
+  }
+  const total = get(`SELECT COUNT(*) AS n FROM users ${where}`, ...params)?.n ?? 0;
+  const users = all(
+    `SELECT * FROM users ${where} ORDER BY lower(username) LIMIT ? OFFSET ?`,
+    ...params,
+    pageSize,
+    (page - 1) * pageSize
   );
-  const productCounts = Object.fromEntries(
-    all("SELECT owner_id, COUNT(*) AS n FROM products GROUP BY owner_id").map((r) => [r.owner_id, r.n])
-  );
+  // شمارش سهمیه فقط برای همان صفحه (نه GROUP BY روی کل دیتابیس در هر درخواست)
+  const ids = users.map((u) => u.id);
+  let supplierCounts = {};
+  let productCounts = {};
+  if (ids.length) {
+    const ph = ids.map(() => "?").join(",");
+    supplierCounts = Object.fromEntries(
+      all(`SELECT owner_id, COUNT(*) AS n FROM suppliers WHERE owner_id IN (${ph}) GROUP BY owner_id`, ...ids)
+        .map((r) => [r.owner_id, r.n])
+    );
+    productCounts = Object.fromEntries(
+      all(`SELECT owner_id, COUNT(*) AS n FROM products WHERE owner_id IN (${ph}) GROUP BY owner_id`, ...ids)
+        .map((r) => [r.owner_id, r.n])
+    );
+  }
   res.json({
     success: true,
-    users: users
-      .map((u) =>
-        adminUserPayload(u, supplierCounts[u.id] ?? 0, productCounts[u.id] ?? 0)
-      )
-      .sort((a, b) => compareSupplierNames(a.username, b.username) || b.id - a.id),
+    total,
+    page,
+    page_size: pageSize,
+    has_more: page * pageSize < total,
+    users: users.map((u) =>
+      adminUserPayload(u, supplierCounts[u.id] ?? 0, productCounts[u.id] ?? 0)
+    ),
   });
 });
 
 // ─── POST /api/admin/users/:id/update ────────────────────────────────────────
-router.post("/users/:user_id/update", (req, res) => {
+router.post("/users/:user_id/update", ah(async (req, res) => {
   const user = targetUser(req, res);
   if (!user) return;
   const body = req.body ?? {};
@@ -141,8 +171,13 @@ router.post("/users/:user_id/update", (req, res) => {
   if (newPassword) {
     const pwError = passwordStrengthError(newPassword);
     if (pwError) return jsonError(res, pwError);
-    run("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(newPassword), user.id);
-    changes.push("رمز عبور بازنشانی شد");
+    const newHash = await hashPassword(newPassword);
+    run(
+      "UPDATE users SET password_hash = ?, session_epoch = session_epoch + 1 WHERE id = ?",
+      newHash,
+      user.id
+    );
+    changes.push("رمز عبور بازنشانی شد (نشست‌های قبلی کاربر باطل شد)");
   }
 
   if (adminFlag !== undefined && adminFlag !== null && adminFlag !== "") {
@@ -169,7 +204,7 @@ router.post("/users/:user_id/update", (req, res) => {
     message: "✓ " + changes.join("، "),
     user: adminUserPayload(fresh),
   });
-});
+}));
 
 // ─── POST /api/admin/users/:id/license — اعطا/حذف لایسنس ─────────────────────
 router.post("/users/:user_id/license", (req, res) => {

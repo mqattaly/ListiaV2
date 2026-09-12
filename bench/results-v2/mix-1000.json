@@ -1,0 +1,111 @@
+{
+  "scenario": "mix",
+  "concurrency": 1000,
+  "duration_s": 20,
+  "total_requests": 6573,
+  "total_rps": 328.6,
+  "mb_received": 173.4,
+  "status_codes": {
+    "200": 6573
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.4,
+    "lag_p95_ms": 19,
+    "lag_p99_ms": 125.8,
+    "lag_max_ms": 1019
+  },
+  "rss_mb": 237,
+  "endpoints": [
+    {
+      "endpoint": "GET /api/dashboard",
+      "count": 1984,
+      "rps": 99.2,
+      "avg_ms": 3321.2,
+      "p50": 3439.9,
+      "p95": 4082.1,
+      "p99": 4246.3,
+      "max": 4247
+    },
+    {
+      "endpoint": "GET /api/purchases",
+      "count": 1338,
+      "rps": 66.9,
+      "avg_ms": 3353.4,
+      "p50": 3440.1,
+      "p95": 4368.2,
+      "p99": 4521.4,
+      "max": 5329
+    },
+    {
+      "endpoint": "GET /api/estimate",
+      "count": 752,
+      "rps": 37.6,
+      "avg_ms": 3433.6,
+      "p50": 3457.2,
+      "p95": 4371.9,
+      "p99": 5107.9,
+      "max": 5226
+    },
+    {
+      "endpoint": "GET /api/search",
+      "count": 658,
+      "rps": 32.9,
+      "avg_ms": 3080.2,
+      "p50": 3385.5,
+      "p95": 4075.6,
+      "p99": 4082.3,
+      "max": 4245
+    },
+    {
+      "endpoint": "GET /api/suppliers",
+      "count": 641,
+      "rps": 32,
+      "avg_ms": 3287.2,
+      "p50": 3425.4,
+      "p95": 4081.6,
+      "p99": 4245.4,
+      "max": 4247
+    },
+    {
+      "endpoint": "POST بایگانی/بازگردانی (نوشتن)",
+      "count": 555,
+      "rps": 27.8,
+      "avg_ms": 3222,
+      "p50": 3434.1,
+      "p95": 3714.7,
+      "p99": 3803.7,
+      "max": 3893
+    },
+    {
+      "endpoint": "GET /api/suppliers/:id",
+      "count": 320,
+      "rps": 16,
+      "avg_ms": 3362.5,
+      "p50": 3438.8,
+      "p95": 4254.9,
+      "p99": 4328.4,
+      "max": 4331
+    },
+    {
+      "endpoint": "POST /products (درج)",
+      "count": 209,
+      "rps": 10.4,
+      "avg_ms": 3178.3,
+      "p50": 3402.1,
+      "p95": 3773.5,
+      "p99": 3791.9,
+      "max": 3870
+    },
+    {
+      "endpoint": "POST /api/auth/login (scrypt)",
+      "count": 116,
+      "rps": 5.8,
+      "avg_ms": 3368.6,
+      "p50": 3558.1,
+      "p95": 3858.8,
+      "p99": 3899.3,
+      "max": 3901
+    }
+  ]
+}

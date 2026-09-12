@@ -1,0 +1,31 @@
+{
+  "scenario": "adminUsers",
+  "concurrency": 5,
+  "duration_s": 20,
+  "total_requests": 5523,
+  "total_rps": 276.1,
+  "mb_received": 133.9,
+  "status_codes": {
+    "200": 5523
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.2,
+    "lag_p95_ms": 3.3,
+    "lag_p99_ms": 8.5,
+    "lag_max_ms": 10
+  },
+  "rss_mb": 126,
+  "endpoints": [
+    {
+      "endpoint": "GET /api/admin/users",
+      "count": 5523,
+      "rps": 276.1,
+      "avg_ms": 18.1,
+      "p50": 16.6,
+      "p95": 30,
+      "p99": 37.9,
+      "max": 67
+    }
+  ]
+}

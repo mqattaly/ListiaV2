@@ -9,14 +9,12 @@ import {
   ShieldCheck,
   ArrowRight,
   MailCheck,
-  Sparkles,
   BarChart3,
   Users,
   Wallet,
 } from "lucide-react";
 import { api, getSessionToken, saveSessionToken } from "../api.js";
 import { useApp } from "../context/AppContext.jsx";
-import { APP_VERSION } from "../format.js";
 import FxBackdrop from "../components/FxBackdrop.jsx";
 import { BtnSpinner } from "../components/bits.jsx";
 
@@ -158,6 +156,7 @@ export default function AuthPage() {
                   <VerifyPanel
                     form={form}
                     setForm={setForm}
+                    error={error}
                     notice={notice}
                     setNotice={setNotice}
                     setError={setError}
@@ -202,14 +201,30 @@ export default function AuthPage() {
                           </div>
                         </div>
                         <div className="field">
-                          <label>شماره موبایل</label>
+                          <label>نام کاربری</label>
                           <input
-                            className="input mono"
-                            value={form.phone}
-                            onChange={set("phone")}
-                            placeholder="09123456789"
+                            className="input"
+                            value={form.username}
+                            onChange={set("username")}
+                            placeholder="username"
                             style={{ direction: "ltr", textAlign: "left" }}
+                            autoComplete="username"
                           />
+                        </div>
+                        <div className="field">
+                          <label>رمز عبور</label>
+                          <input
+                            className="input"
+                            type="password"
+                            value={form.password}
+                            onChange={set("password")}
+                            placeholder="••••••••"
+                            style={{ direction: "ltr", textAlign: "left" }}
+                            autoComplete="new-password"
+                          />
+                          <span className="hint-text">
+                            حداقل ۹ کاراکتر؛ شامل حرف کوچک، بزرگ و عدد
+                          </span>
                         </div>
                         <div className="field">
                           <label>ایمیل</label>
@@ -222,37 +237,46 @@ export default function AuthPage() {
                             style={{ direction: "ltr", textAlign: "left" }}
                           />
                         </div>
+                        <div className="field">
+                          <label>شماره موبایل</label>
+                          <input
+                            className="input mono"
+                            value={form.phone}
+                            onChange={set("phone")}
+                            placeholder="09123456789"
+                            style={{ direction: "ltr", textAlign: "left" }}
+                          />
+                        </div>
                       </>
                     )}
 
-                    <div className="field">
-                      <label>نام کاربری</label>
-                      <input
-                        className="input"
-                        value={form.username}
-                        onChange={set("username")}
-                        placeholder="username"
-                        style={{ direction: "ltr", textAlign: "left" }}
-                        autoComplete="username"
-                      />
-                    </div>
-                    <div className="field">
-                      <label>رمز عبور</label>
-                      <input
-                        className="input"
-                        type="password"
-                        value={form.password}
-                        onChange={set("password")}
-                        placeholder="••••••••"
-                        style={{ direction: "ltr", textAlign: "left" }}
-                        autoComplete={mode === "login" ? "current-password" : "new-password"}
-                      />
-                      {mode === "signup" && (
-                        <span className="hint-text">
-                          حداقل ۹ کاراکتر؛ شامل حرف کوچک، بزرگ و عدد
-                        </span>
-                      )}
-                    </div>
+                    {mode === "login" && (
+                      <>
+                        <div className="field">
+                          <label>نام کاربری</label>
+                          <input
+                            className="input"
+                            value={form.username}
+                            onChange={set("username")}
+                            placeholder="username"
+                            style={{ direction: "ltr", textAlign: "left" }}
+                            autoComplete="username"
+                          />
+                        </div>
+                        <div className="field">
+                          <label>رمز عبور</label>
+                          <input
+                            className="input"
+                            type="password"
+                            value={form.password}
+                            onChange={set("password")}
+                            placeholder="••••••••"
+                            style={{ direction: "ltr", textAlign: "left" }}
+                            autoComplete="current-password"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>
                       {busy
@@ -288,18 +312,6 @@ export default function AuthPage() {
               </motion.div>
             </AnimatePresence>
           </motion.div>
-          <div
-            style={{
-              textAlign: "center",
-              marginTop: 18,
-              fontSize: 10.5,
-              color: "var(--text-3)",
-              fontWeight: 700,
-              direction: "ltr",
-            }}
-          >
-            Listia v{APP_VERSION}
-          </div>
         </div>
       </div>
     </>
@@ -319,10 +331,7 @@ function AuthHero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15, duration: 0.5 }}
       >
-        <span className="badge badge-accent" style={{ marginBottom: 18, display: "inline-flex" }}>
-          <Sparkles size={13} /> نسخه‌ی ۲.۰ — بازطراحی کامل
-        </span>
-        <h2>
+        <h2 style={{ marginTop: 8 }}>
           لیست خریدِتان، <span className="text-gradient">مرتب و زنده</span>
           <br />
           مثل ذهنِ شماست.
@@ -365,19 +374,38 @@ function AuthHero() {
   );
 }
 
-function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setError, setNotice }) {
+// یکسان‌سازی ارقام فارسی/عربی با انگلیسی (کیبورد موبایل ممکن است رقم فارسی بفرستد)
+const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+const toLatinDigits = (s) =>
+  String(s).replace(/[۰-۹٠-٩]/g, (d) => {
+    let i = FA_DIGITS.indexOf(d);
+    if (i < 0) i = AR_DIGITS.indexOf(d);
+    return String(i);
+  });
+
+function VerifyPanel({ form, setForm, error, notice, onDone, devCode, setDevCode, setError, setNotice }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
   const [changeEmail, setChangeEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
+  const [cooldown, setCooldown] = useState(60); // شمارش معکوس اولیه بعد از ثبت‌نام (مطابق محدودیت سرور: ۶۰ ثانیه)
+  const [sending, setSending] = useState(false); // ارسال در پس‌زمینه‌ی سرور
+  const [changingEmail, setChangingEmail] = useState(false);
   const refs = useRef([]);
 
   useEffect(() => {
     setTimeout(() => refs.current[0]?.focus(), 400);
   }, []);
 
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
+
   const setDigit = (i) => (e) => {
-    const value = e.target.value.replace(/\D/g, "").slice(-1);
+    const value = toLatinDigits(e.target.value).replace(/\D/g, "").slice(-1);
     setDigits((d) => {
       const next = [...d];
       next[i] = value;
@@ -392,14 +420,14 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
 
   const onPaste = (e) => {
     e.preventDefault();
-    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const text = toLatinDigits(e.clipboardData.getData("text")).replace(/\D/g, "").slice(0, 6);
     setDigits(text.padEnd(6, "").split("").slice(0, 6));
     refs.current[Math.min(text.length, 5)]?.focus();
   };
 
   const verify = async (e) => {
     e?.preventDefault();
-    const code = digits.join("");
+    const code = toLatinDigits(digits.join(""));
     if (code.length !== 6) {
       setError("کد ۶ رقمی را کامل وارد کنید.");
       return;
@@ -417,30 +445,65 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
   };
 
   const resend = async () => {
+    if (cooldown > 0 || busy || sending) return;
     setError("");
+    setNotice("");
+    setSending(true);
     try {
       const data = await api.post("/api/auth/resend-verification", { email: form.email });
-      setNotice(data.message);
+      setNotice((data.message || "کد جدید در حال ارسال است…") + " (فقط به همین ایمیل)");
       setDevCode(data.dev_code || "");
+      setCooldown(60);
+      setDigits(["", "", "", "", "", ""]);
+      setTimeout(() => refs.current[0]?.focus(), 100);
     } catch (err) {
-      setError(err.message);
+      // سرور می‌گوید چند ثانیه دیگر صبر کن؛ شمارش معکوس را با مقدار سرور همگام کن
+      const wait = Number(err.data?.retry_after);
+      if (Number.isFinite(wait) && wait > 0) {
+        setCooldown(wait);
+        setError("");
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setSending(false);
     }
   };
 
   const changeEmailAddress = async (e) => {
     e.preventDefault();
+    const candidate = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+      setError("ایمیل جدید را درست وارد کنید.");
+      return;
+    }
     setError("");
+    setNotice("");
+    setChangingEmail(true);
     try {
       const data = await api.post("/api/auth/change-verification-email", {
         current_email: form.email,
-        new_email: newEmail,
+        new_email: candidate,
       });
-      setForm((f) => ({ ...f, email: data.email }));
+      setForm((f) => ({ ...f, email: data.email || candidate }));
+      setNewEmail("");
       setChangeEmail(false);
-      setNotice(data.message);
+      setDigits(["", "", "", "", "", ""]);
+      setCooldown(60);
+      setNotice(data.message || "ایمیل تغییر کرد؛ کد جدید در حال ارسال است…");
       setDevCode(data.dev_code || "");
+      setTimeout(() => refs.current[0]?.focus(), 150);
     } catch (err) {
-      setError(err.message);
+      const wait = Number(err.data?.retry_after);
+      if (Number.isFinite(wait) && wait > 0) {
+        setCooldown(wait);
+        setChangeEmail(false);
+        setError("");
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setChangingEmail(false);
     }
   };
 
@@ -451,6 +514,18 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
         کد ۶ رقمی ارسال‌شده به <b style={{ direction: "ltr", unicodeBidi: "embed" }}>{form.email}</b> را
         وارد کنید.
       </p>
+      <div className="auth-alert info" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <span aria-hidden="true">📬</span>
+        <span>
+          ایمیل ممکن است در پوشه‌ی <b>هرزنامه (Spam/Junk)</b> رفته باشد؛ اگر در صندوق ورودی نبود،
+          حتماً آن پوشه را هم چک کنید و ایمیل ما را «Not Spam» علامت بزنید.
+        </span>
+      </div>
+      {error && (
+        <motion.div className="auth-alert err" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+          {error}
+        </motion.div>
+      )}
       {notice && <div className="auth-alert ok">{notice}</div>}
       {devCode && (
         <div className="auth-alert info">
@@ -477,9 +552,26 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
         </button>
       </form>
       <div className="auth-switch">
-        کد نرسید؟ <button onClick={resend}>ارسال مجدد</button>
+        کد نرسید؟{" "}
+        {cooldown > 0 ? (
+          <span style={{ color: "var(--text-3)", fontWeight: 700 }}>
+            ارسال مجدد تا {String(cooldown).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d])} ثانیه دیگر
+          </span>
+        ) : (
+          <button onClick={resend} disabled={busy || sending}>
+            {sending ? "در حال ارسال…" : "ارسال مجدد کد"}
+          </button>
+        )}
         {" · "}
-        <button onClick={() => setChangeEmail((v) => !v)}>تغییر ایمیل</button>
+        <button
+          onClick={() => {
+            setChangeEmail((v) => !v);
+            setError("");
+          }}
+          disabled={sending}
+        >
+          تغییر ایمیل
+        </button>
       </div>
       <AnimatePresence>
         {changeEmail && (
@@ -496,10 +588,12 @@ function VerifyPanel({ form, setForm, notice, onDone, devCode, setDevCode, setEr
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="ایمیل جدید"
+              disabled={changingEmail}
               style={{ direction: "ltr" }}
             />
-            <button className="btn" type="submit">
-              <ArrowRight size={16} /> ثبت
+            <button className="btn" type="submit" disabled={changingEmail || !newEmail.trim()}>
+              {changingEmail ? <BtnSpinner /> : <ArrowRight size={16} />}
+              {changingEmail ? "در حال ارسال…" : "ثبت"}
             </button>
           </motion.form>
         )}

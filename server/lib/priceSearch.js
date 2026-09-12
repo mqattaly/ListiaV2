@@ -8,7 +8,29 @@ const SEARCH_UA =
   "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
 const CACHE_TTL = 45_000;
+const CACHE_MAX = 300;
 const cache = new Map();
+
+function cacheSet(key, data) {
+  cache.set(key, { at: Date.now(), data });
+  // سقف ظرفیت + حذف منقضی‌ها (LRU بر اساس ترتیب درج)
+  if (cache.size <= CACHE_MAX) return;
+  const now = Date.now();
+  for (const [k, v] of cache) {
+    if (cache.size <= CACHE_MAX * 0.8) break;
+    if (now - v.at > CACHE_TTL) cache.delete(k);
+  }
+  while (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) {
+    if (now - v.at > CACHE_TTL) cache.delete(k);
+  }
+}, 60_000).unref?.();
 
 export const PRICE_SOURCES = {
   digikala: {
@@ -26,6 +48,11 @@ export const PRICE_SOURCES = {
     label: "باسلام",
     domains: ["basalam.com"],
   },
+  tedadbala: {
+    id: "tedadbala",
+    label: "تعداد بالا (عمده)",
+    domains: ["tedadbala.com"],
+  },
 };
 
 const SOURCE_ALIASES = {
@@ -37,6 +64,13 @@ const SOURCE_ALIASES = {
   ترب: "torob",
   basalam: "basalam",
   باسلام: "basalam",
+  tedadbala: "tedadbala",
+  "تدادبالا": "tedadbala",
+  "تداد بالا": "tedadbala",
+  تداد: "tedadbala",
+  "تعدادبالا": "tedadbala",
+  "تعداد بالا": "tedadbala",
+  تعداد: "tedadbala",
 };
 
 function sourceForUrl(url) {
@@ -86,6 +120,7 @@ const SOURCE_DEFAULT_UNIT = {
   digikala: "rial",
   torob: "toman",
   basalam: "rial",
+  tedadbala: "toman",
 };
 
 function detectUnitFromCurrency(currency) {
@@ -154,15 +189,45 @@ function buildResult({ title, rawValue, sourceId, url, image, currency = "", pri
 }
 
 // دیجی‌کالا: API عمومی جستجو — واحد با تشخیص هوشمند (معمولاً ریال ← ÷۱۰)
-async function searchDigikala(query) {
-  const url =
-    "https://api.digikala.com/v1/search/?page=1&rows=8&q=" +
-    encodeURIComponent(query);
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json();
-  const products = body?.data?.products ?? [];
-  return products
+// توجه: پارامتر rows در نسخه‌ی فعلی API فقط مقادیر ۱۵، ۱۶، ۱۸ یا ۲۰ را
+// می‌پذیرد و مقدار دیگری (مثل ۸ قدیمی) را با HTTP 400 رد می‌کند.
+const DIGIKALA_ROWS = 20;
+
+// در نسخه‌ی جدید API تصویر اصلی به‌صورت آرایه است: images.main.url: ["https://..."]
+function digikalaImage(product) {
+  const pick = (u) => (Array.isArray(u) ? u[0] ?? "" : u ?? "");
+  const main = product.images?.main?.url;
+  if (main) return pick(main);
+  const firstListed = product.images?.list?.[0]?.url;
+  if (firstListed) return pick(firstListed);
+  if (Array.isArray(product.images) && product.images[0]) {
+    return pick(product.images[0]?.url);
+  }
+  return "";
+}
+
+function digikalaProductUrl(product) {
+  const uri = product.url?.uri;
+  if (uri) return "https://www.digikala.com" + (uri.startsWith("/") ? uri : "/" + uri);
+  return product.id ? `https://www.digikala.com/product/dkp-${product.id}` : "";
+}
+
+// شکل ویجتیِ جستجوی دسته‌بندی v2 را هم به فهرست تخت محصولات تبدیل می‌کند
+function extractDigikalaWidgets(widgets) {
+  const out = [];
+  if (!Array.isArray(widgets)) return out;
+  for (const w of widgets) {
+    if (w?.type === "vertical_product_listing" && Array.isArray(w.data?.widgets)) {
+      for (const pw of w.data.widgets) {
+        if (pw?.type === "product" && pw.data) out.push(pw.data);
+      }
+    }
+  }
+  return out;
+}
+
+function mapDigikalaProducts(products) {
+  return (products ?? [])
     .map((item) => {
       const product = item.product ?? item;
       const priceObj = product.default_variant?.price ?? {};
@@ -170,16 +235,46 @@ async function searchDigikala(query) {
         title: product.title_fa ?? product.title_en ?? "",
         rawValue: priceObj.selling_price ?? priceObj.rrp_price ?? null,
         sourceId: "digikala",
-        url: `https://www.digikala.com/product/dkp-${product.id}`,
-        image:
-          product.images?.main?.url ??
-          (Array.isArray(product.images) ? product.images[0]?.url : null) ??
-          "",
+        url: digikalaProductUrl(product),
+        image: digikalaImage(product),
         currency: priceObj.currency ?? "",
         priceText: findPriceText(priceObj, product.default_variant, product),
       });
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+async function digikalaGetJson(url) {
+  const res = await fetchWithTimeout(url, {
+    headers: { Accept: "application/json", Referer: "https://www.digikala.com/" },
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.message ?? "";
+    } catch {
+      /* پاسخ خطا JSON نبود */
+    }
+    throw new Error(`HTTP ${res.status}${detail ? ` - ${String(detail).slice(0, 120)}` : ""}`);
+  }
+  return res.json();
+}
+
+async function searchDigikala(query) {
+  const q = encodeURIComponent(query);
+  let body;
+  try {
+    body = await digikalaGetJson(
+      `https://api.digikala.com/v1/search/?page=1&rows=${DIGIKALA_ROWS}&q=${q}`
+    );
+  } catch (err) {
+    // مسیر جایگزین: جستجوی معنایی text-lenz همان ساختار data.products را دارد
+    body = await digikalaGetJson(`https://api.digikala.com/v1/search/text-lenz/?page=1&q=${q}`);
+  }
+  let products = body?.data?.products;
+  if (!Array.isArray(products)) products = extractDigikalaWidgets(body?.data?.widgets);
+  return mapDigikalaProducts(products);
 }
 
 // ترب: API عمومی جستجو — price_text مبنای تومان، فیلد price هم تومانی است
@@ -240,10 +335,63 @@ async function searchBasalam(query) {
     .filter(Boolean);
 }
 
+// تعداد بالا (تداد بالا): فروشگاه عمده‌فروشی روی ووکامرس — Store API عمومی (قیمت‌ها تومان)
+async function searchTedadbala(query) {
+  const fields = "id,name,permalink,prices,price_html,images,is_in_stock,on_sale,type";
+  // توجه: Store API مقدار orderby=relevance را نمی‌پذیرد؛ با وجود search خودش
+  // نتایج مرتبط را اول می‌آورد (مقادیر مجاز: date/popularity/rating/...).
+  const url =
+    "https://tedadbala.com/wp-json/wc/store/v1/products?per_page=8&_fields=" +
+    encodeURIComponent(fields) +
+    "&search=" +
+    encodeURIComponent(query);
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const products = await res.json();
+  if (!Array.isArray(products)) return [];
+  return products
+    .filter((p) => p.is_in_stock !== false)
+    .map((item) => {
+      const prices = item.prices ?? {};
+
+      // کمینه‌ی قیمت یک بازه (محصول متغیر) در نسخه‌های مختلف Store API با
+      // کلیدهای minimum_amount یا min_amount آمده و مقدارش رشته یا شیء است.
+      const amountValue = (a) => {
+        if (a == null) return null;
+        if (typeof a === "string" || typeof a === "number") return String(a);
+        return a.sale_price || a.price || a.regular_price || null;
+      };
+      const range = prices.price_range ?? null;
+      const rangeMin = amountValue(range?.minimum_amount ?? range?.min_amount ?? range?.min_price);
+      // محصول متغیر: قیمت واحد خالی است و بازه داده می‌شود؛ کمینه را مبنا بگذار
+      const rawPrice =
+        prices.sale_price ||
+        prices.price ||
+        prices.regular_price ||
+        rangeMin ||
+        null;
+      const image =
+        item.images?.[0]?.src ||
+        item.images?.[0]?.thumbnail ||
+        "";
+      return buildResult({
+        title: item.name ?? "",
+        rawValue: rawPrice,
+        sourceId: "tedadbala",
+        url: item.permalink || "",
+        image,
+        currency: prices.currency_code || prices.currency_symbol || "IRT",
+        priceText: typeof item.price_html === "string" ? item.price_html : "",
+      });
+    })
+    .filter(Boolean);
+}
+
 const SEARCHERS = {
   digikala: searchDigikala,
   torob: searchTorob,
   basalam: searchBasalam,
+  tedadbala: searchTedadbala,
 };
 
 function resultMatchesQuery(item, query) {
@@ -323,7 +471,7 @@ export async function priceSearch(query, siteUrl = "", source = "") {
   if (siteUrl && !safeSite) throw new Error("آدرس سایت معتبر نیست.");
   const siteSource = safeSite ? sourceForUrl(safeSite) : null;
   if (safeSite && !siteSource) {
-    throw new Error("فقط دیجی‌کالا، ترب و باسلام پشتیبانی می‌شوند.");
+    throw new Error("فقط دیجی‌کالا، ترب، باسلام و تعداد بالا پشتیبانی می‌شوند.");
   }
 
   let selected = SOURCE_ALIASES[String(source ?? "").trim().toLowerCase()] ?? "";
@@ -376,7 +524,7 @@ export async function priceSearch(query, siteUrl = "", source = "") {
     errors: errors.slice(0, 8),
   };
   if (data.results.length && !safeSite) {
-    cache.set(cacheKey, { at: Date.now(), data });
+    cacheSet(cacheKey, data);
   }
   return data;
 }

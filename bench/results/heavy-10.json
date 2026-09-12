@@ -1,0 +1,51 @@
+{
+  "scenario": "heavy",
+  "concurrency": 10,
+  "duration_s": 20,
+  "total_requests": 288,
+  "total_rps": 14.4,
+  "mb_received": 210.4,
+  "status_codes": {
+    "200": 288
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.2,
+    "lag_p95_ms": 2.9,
+    "lag_p99_ms": 10.1,
+    "lag_max_ms": 26
+  },
+  "rss_mb": 119,
+  "endpoints": [
+    {
+      "endpoint": "HEAVY /purchases (1500 محصول)",
+      "count": 109,
+      "rps": 5.5,
+      "avg_ms": 731.8,
+      "p50": 757.8,
+      "p95": 947.2,
+      "p99": 1061.5,
+      "max": 1161
+    },
+    {
+      "endpoint": "HEAVY /dashboard (1500 محصول)",
+      "count": 103,
+      "rps": 5.2,
+      "avg_ms": 642.1,
+      "p50": 663.9,
+      "p95": 870.2,
+      "p99": 948,
+      "max": 1063
+    },
+    {
+      "endpoint": "HEAVY /estimate (1500 محصول)",
+      "count": 76,
+      "rps": 3.8,
+      "avg_ms": 770.7,
+      "p50": 785.3,
+      "p95": 957.3,
+      "p99": 1083.8,
+      "max": 1084
+    }
+  ]
+}

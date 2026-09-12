@@ -574,6 +574,41 @@
 }
 
 /* ─── نتیجه‌ی جستجوی قیمت ─────────────────────────────────────────────────── */
+/* ردیف شغل در مودال جستجوی قیمت */
+.ps-jobrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.ps-jobico {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--accent-grad);
+}
+.ps-jobhint {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text-3);
+}
+.ps-queries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 2px;
+  color: var(--accent-1);
+}
+.ps-queries .badge {
+  font-size: 10.5px;
+}
+
 .price-result {
   display: flex;
   gap: 14px;
@@ -597,6 +632,76 @@
   object-fit: contain;
   background: #fff;
   flex-shrink: 0;
+}
+/* بندانگشتی با امکان بزرگ‌نمایی هاور */
+.prc-thumb {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.prc-thumb img {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.18s ease;
+}
+.prc-thumb:hover img {
+  transform: scale(1.12);
+}
+.prc-zoom-hint {
+  position: absolute;
+  inset-inline-end: 3px;
+  bottom: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: rgba(19, 32, 58, 0.72);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.prc-thumb:hover .prc-zoom-hint {
+  opacity: 1;
+}
+/* نمای بزرگ شناورِ کنار نشانگر (روی مودال، با pointer-events غیرفعال) */
+.prc-zoom {
+  position: fixed;
+  z-index: 400;
+  width: 260px;
+  pointer-events: none;
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  padding: 10px;
+  animation: prc-zoom-in 0.12s ease-out;
+}
+.prc-zoom img {
+  width: 100%;
+  height: 240px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+}
+.prc-zoom-title {
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: var(--text-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@keyframes prc-zoom-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
 }
 .price-result .prc-title {
   font-size: 13px;
@@ -711,6 +816,128 @@
   word-break: break-all;
   line-height: 1.7;
 }
+
+/* ─── تعرفه‌ی لایسنس ──────────────────────────────────────────────────────── */
+.license-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+.lp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 15px 14px;
+  text-align: center;
+}
+.lp-card.lp-hot {
+  border-color: var(--accent, #1457c4);
+  background: linear-gradient(180deg, rgba(20, 87, 196, 0.1), var(--surface-2) 60%);
+  box-shadow: 0 0 0 1px var(--accent, #1457c4) inset;
+}
+.lp-tag {
+  position: absolute;
+  top: -11px;
+  right: 50%;
+  transform: translateX(50%);
+  background: var(--accent-grad, linear-gradient(135deg, #1457c4, #1f8fec));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 3px 11px;
+  border-radius: 999px;
+}
+.lp-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-1);
+}
+.lp-days {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.lp-price {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--accent, #1457c4);
+  white-space: nowrap;
+}
+.lp-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.lp-howto {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+.lp-howto-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.lp-howto ol {
+  margin: 0;
+  padding-inline-start: 20px;
+  font-size: 13px;
+  line-height: 2.2;
+  color: var(--text-2);
+}
+.lp-mail,
+.lp-insta-handle {
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--accent, #1457c4);
+  text-decoration: none;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lp-insta-handle {
+  color: #c13584;
+}
+.lp-insta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(45deg, #f09433, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888);
+  border: none;
+}
+.lp-insta-btn:hover {
+  filter: brightness(1.06);
+  color: #fff;
+}
+.lp-renew > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent, #1457c4);
+  list-style: none;
+}
+.lp-renew > summary::-webkit-details-marker { display: none; }
+.lp-renew > summary::before { content: "▸ "; }
+.lp-renew[open] > summary::before { content: "▾ "; }
 .section-title {
   font-size: 15.5px;
   font-weight: 800;
@@ -833,3 +1060,142 @@
   flex: 1;
   min-width: 200px;
 }
+
+/* ─── صفحه‌ی لایسنس ──────────────────────────────────────────────────────── */
+.license-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+.lic-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 26px 24px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.015) 42%, rgba(255, 255, 255, 0.045)),
+    var(--surface);
+}
+.lic-hero .lic-glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.lic-active {
+  border-color: rgba(245, 184, 77, 0.45);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(245, 184, 77, 0.16), transparent 60%),
+    var(--surface);
+}
+.lic-free {
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(20, 87, 196, 0.14), transparent 60%),
+    var(--surface);
+}
+.lic-expired {
+  border-color: rgba(239, 68, 68, 0.4);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(239, 68, 68, 0.13), transparent 60%),
+    var(--surface);
+}
+.lic-hero-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lic-hero-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #1457c4, #1f8fec);
+  box-shadow: 0 10px 26px rgba(20, 87, 196, 0.35);
+}
+.lic-active .lic-hero-icon {
+  background: linear-gradient(135deg, #d59b2c, #f5b84d);
+  box-shadow: 0 10px 26px rgba(245, 184, 77, 0.4);
+}
+.lic-expired .lic-hero-icon {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  box-shadow: 0 10px 26px rgba(239, 68, 68, 0.35);
+}
+.lic-status {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-1);
+}
+.lic-type {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 3px;
+}
+.lic-badge-ok {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.lic-meta {
+  position: relative;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lic-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.9;
+}
+.lic-meta-row b { color: var(--text-1); }
+.lic-meta-row.lic-muted { color: var(--text-3); font-size: 12.5px; }
+.lic-warn { color: #d97706; }
+.lic-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.lic-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d59b2c, #f5b84d);
+}
+.lic-free-note,
+.lic-expired-note {
+  position: relative;
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 2.2;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.lic-expired-note {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.07);
+}
+.lic-key-card .token-box { direction: ltr; text-align: left; }

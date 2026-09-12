@@ -24,26 +24,37 @@ export default function Admin() {
   const [editUser, setEditUser] = useState(null);
   const [licenseUser, setLicenseUser] = useState(null);
   const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const load = useCallback(async () => {
-    const d = await api.get("/api/admin/users").catch(() => null);
-    if (d) setData(d);
-  }, []);
+  // جستجو و صفحه‌بندی سمت سرور (۵۰ کاربر در هر صفحه)
+  const load = useCallback(async (term = "", append = false) => {
+    const params = new URLSearchParams({
+      page: append ? String((data?.page ?? 0) + 1) : "1",
+      page_size: "50",
+    });
+    if (term) params.set("q", term);
+    const d = await api.get(`/api/admin/users?${params.toString()}`).catch(() => null);
+    if (!d) return;
+    setData((prev) =>
+      append && prev ? { ...d, users: [...prev.users, ...d.users] } : d
+    );
+  }, [data?.page]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    const timer = setTimeout(() => load(q.trim(), false), 300);
+    return () => clearTimeout(timer);
+  }, [q, load]);
 
-  const users = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return data?.users ?? [];
-    return (data?.users ?? []).filter(
-      (u) =>
-        u.username.toLowerCase().includes(term) ||
-        (u.full_name ?? "").toLowerCase().includes(term) ||
-        (u.email ?? "").toLowerCase().includes(term)
-    );
-  }, [data, q]);
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      await load(q.trim(), true);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const users = data?.users ?? [];
 
   const removeUser = async (u) => {
     const ok = await confirm({
@@ -69,7 +80,7 @@ export default function Admin() {
             <ShieldCheck size={21} className="text-gradient" /> پنل مدیریت
           </h2>
           <p className="page-sub">
-            {data ? `${data.users.length} کاربر ثبت‌شده` : "در حال بارگذاری…"}
+            {data ? `${data.total ?? users.length} کاربر ثبت‌شده` : "در حال بارگذاری…"}
           </p>
         </div>
         <div className="page-actions">
@@ -147,6 +158,14 @@ export default function Admin() {
             </StaggerItem>
           ))}
         </StaggerList>
+      )}
+
+      {data?.has_more && (
+        <div style={{ textAlign: "center", marginTop: 18 }}>
+          <button className="btn" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? "در حال بارگذاری…" : "کاربران بیشتر"}
+          </button>
+        </div>
       )}
 
       <EditUserModal
@@ -319,11 +338,10 @@ function LicenseUserModal({ user, onClose, onSaved }) {
           <div className="field" style={{ flex: 1, minWidth: 150 }}>
             <label>مدت</label>
             <select className="select" value={duration} onChange={(e) => setDuration(e.target.value)}>
+              <option value="30D">یک ماهه</option>
+              <option value="180D">شش ماهه</option>
+              <option value="365D">یکساله</option>
               <option value="LIFE">مادام‌العمر</option>
-              <option value="30D">۱ ماهه</option>
-              <option value="90D">۳ ماهه</option>
-              <option value="180D">۶ ماهه</option>
-              <option value="365D">۱ ساله</option>
             </select>
           </div>
         </div>
@@ -414,11 +432,10 @@ function KeyGeneratorModal({ open, onClose }) {
                 <div className="field" style={{ flex: 1 }}>
                   <label>مدت</label>
                   <select className="select" value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}>
+                    <option value="30D">یک ماهه</option>
+                    <option value="180D">شش ماهه</option>
+                    <option value="365D">یکساله</option>
                     <option value="LIFE">مادام‌العمر</option>
-                    <option value="30D">۱ ماهه</option>
-                    <option value="90D">۳ ماهه</option>
-                    <option value="180D">۶ ماهه</option>
-                    <option value="365D">۱ ساله</option>
                   </select>
                 </div>
               </div>

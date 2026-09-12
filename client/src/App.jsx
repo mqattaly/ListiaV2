@@ -1,20 +1,22 @@
-// روتینگ اصلی + محافظت از مسیرها
-import React from "react";
+// روتینگ اصلی + محافظت از مسیرها (صفحه‌ها با lazy load جدا تکه‌بندی می‌شوند)
+import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useApp } from "./context/AppContext.jsx";
 import Layout from "./components/Layout.jsx";
-import AuthPage from "./pages/AuthPage.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import Purchases from "./pages/Purchases.jsx";
-import Suppliers from "./pages/Suppliers.jsx";
-import SupplierDetail from "./pages/SupplierDetail.jsx";
-import SearchPage from "./pages/SearchPage.jsx";
-import Estimate from "./pages/Estimate.jsx";
-import ImportPage from "./pages/ImportPage.jsx";
-import Account from "./pages/Account.jsx";
-import Admin from "./pages/Admin.jsx";
 import { ShoppingBasket } from "lucide-react";
+
+const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+const Purchases = lazy(() => import("./pages/Purchases.jsx"));
+const Suppliers = lazy(() => import("./pages/Suppliers.jsx"));
+const SupplierDetail = lazy(() => import("./pages/SupplierDetail.jsx"));
+const SearchPage = lazy(() => import("./pages/SearchPage.jsx"));
+const Estimate = lazy(() => import("./pages/Estimate.jsx"));
+const ImportPage = lazy(() => import("./pages/ImportPage.jsx"));
+const Account = lazy(() => import("./pages/Account.jsx"));
+const License = lazy(() => import("./pages/License.jsx"));
+const Admin = lazy(() => import("./pages/Admin.jsx"));
 
 function BootSplash() {
   return (
@@ -87,36 +89,39 @@ function EmptyState404() {
 export default function App() {
   const { user } = useApp();
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          <GuestOnly>
-            <AuthPage />
-          </GuestOnly>
-        }
-      />
-      <Route
-        element={
-          <Protected>
-            <Layout />
-          </Protected>
-        }
-      >
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/purchases" element={<Purchases />} />
-        <Route path="/suppliers" element={<Suppliers />} />
-        <Route path="/supplier/:id" element={<SupplierDetail />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/estimate" element={<Estimate />} />
-        <Route path="/import" element={<ImportPage />} />
-        <Route path="/account" element={<Account />} />
+    <Suspense fallback={<BootSplash />}>
+      <Routes>
         <Route
-          path="/admin"
-          element={user?.is_admin ? <Admin /> : <Navigate to="/" replace />}
+          path="/login"
+          element={
+            <GuestOnly>
+              <AuthPage />
+            </GuestOnly>
+          }
         />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+        <Route
+          element={
+            <Protected>
+              <Layout />
+            </Protected>
+          }
+        >
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/supplier/:id" element={<SupplierDetail />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/estimate" element={<Estimate />} />
+          <Route path="/import" element={<ImportPage />} />
+          <Route path="/account" element={<Account />} />
+          <Route path="/license" element={<License />} />
+          <Route
+            path="/admin"
+            element={user?.is_admin ? <Admin /> : <Navigate to="/" replace />}
+          />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

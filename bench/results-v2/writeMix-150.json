@@ -1,0 +1,41 @@
+{
+  "scenario": "writeMix",
+  "concurrency": 150,
+  "duration_s": 20,
+  "total_requests": 21116,
+  "total_rps": 1055.8,
+  "mb_received": 10.1,
+  "status_codes": {
+    "200": 21116
+  },
+  "errors": {},
+  "eventloop": {
+    "lag_p50_ms": 0.2,
+    "lag_p95_ms": 22.9,
+    "lag_p99_ms": 73.6,
+    "lag_max_ms": 113
+  },
+  "rss_mb": 141,
+  "endpoints": [
+    {
+      "endpoint": "POST بایگانی/بازگردانی (نوشتن)",
+      "count": 14764,
+      "rps": 738.2,
+      "avg_ms": 142.6,
+      "p50": 157,
+      "p95": 229.9,
+      "p99": 280.3,
+      "max": 347
+    },
+    {
+      "endpoint": "POST /products (درج)",
+      "count": 6352,
+      "rps": 317.6,
+      "avg_ms": 141.8,
+      "p50": 139.5,
+      "p95": 211.9,
+      "p99": 239.8,
+      "max": 280
+    }
+  ]
+}

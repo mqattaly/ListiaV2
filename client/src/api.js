@@ -76,20 +76,29 @@ export function getSessionToken() {
   return memoryToken ?? readStoredToken() ?? readCookieToken();
 }
 
-async function request(path, { method = "GET", body, formData } = {}) {
+async function request(path, { method = "GET", body, formData, timeout } = {}) {
   const options = {
     method,
     credentials: "same-origin",
     headers: {},
   };
+  // تایم‌اوت سمت کلاینت: آپلود تا ۲ دقیقه، بقیه درخواست‌ها ۳۰ ثانیه
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutMs = timeout ?? (formData ? 120_000 : 30_000);
+  const timer = controller
+    ? setTimeout(() => {
+        controller.abort();
+      }, timeoutMs)
+    : null;
+  if (controller) options.signal = controller.signal;
+
   const token = getSessionToken();
   let url = path;
   if (token) {
-    // سه مسیر موازی برای رساندن توکن — اگر یکی از آن‌ها در لایه‌های مسیر
-    // (مرورگر/پراکسی) حذف شود، بقیه می‌رسند:
-    //   ?_lt= پارامتر آدرس  ·  هدر Bearer  ·  هدر اختصاصی X-Listia-Auth
-    const joiner = path.includes("?") ? "&" : "?";
-    url = `${path}${joiner}_lt=${encodeURIComponent(token)}`;
+    // توکن در هدر Bearer و هدر اختصاصی ارسال می‌شود؛ دیگر در URL گذاشته
+    // نمی‌شود تا در لاگ‌ها/تاریخچه/Referer نشت نکند. مسیر کوکی پابرجاست و
+    // فقط به‌عنوان لایه‌ی پشتیبان باقی می‌ماند.
     options.headers.Authorization = `Bearer ${token}`;
     options.headers["X-Listia-Auth"] = token;
   }
@@ -99,7 +108,19 @@ async function request(path, { method = "GET", body, formData } = {}) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
   }
-  const res = await fetch(url, options);
+
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("درخواست بیش از حد طول کشید؛ اتصال اینترنت یا سرور را بررسی کنید.");
+    }
+    throw new Error("ارتباط با سرور برقرار نشد؛ اتصال اینترنت را بررسی کنید.");
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
   let data = null;
   try {
     data = await res.json();
@@ -117,6 +138,8 @@ async function request(path, { method = "GET", body, formData } = {}) {
     err.data = data;
     throw err;
   }
+  // اگر سرور نشست تازه‌ای صادر کرد (مثلاً بعد از تغییر رمز)، خودکار ذخیره شود
+  if (data?.session_token) saveSessionToken(data.session_token);
   return data;
 }
 
