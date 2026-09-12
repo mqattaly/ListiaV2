@@ -186,15 +186,45 @@ function buildResult({ title, rawValue, sourceId, url, image, currency = "", pri
 }
 
 // دیجی‌کالا: API عمومی جستجو — واحد با تشخیص هوشمند (معمولاً ریال ← ÷۱۰)
-async function searchDigikala(query) {
-  const url =
-    "https://api.digikala.com/v1/search/?page=1&rows=8&q=" +
-    encodeURIComponent(query);
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json();
-  const products = body?.data?.products ?? [];
-  return products
+// توجه: پارامتر rows در نسخه‌ی فعلی API فقط مقادیر ۱۵، ۱۶، ۱۸ یا ۲۰ را
+// می‌پذیرد و مقدار دیگری (مثل ۸ قدیمی) را با HTTP 400 رد می‌کند.
+const DIGIKALA_ROWS = 20;
+
+// در نسخه‌ی جدید API تصویر اصلی به‌صورت آرایه است: images.main.url: ["https://..."]
+function digikalaImage(product) {
+  const pick = (u) => (Array.isArray(u) ? u[0] ?? "" : u ?? "");
+  const main = product.images?.main?.url;
+  if (main) return pick(main);
+  const firstListed = product.images?.list?.[0]?.url;
+  if (firstListed) return pick(firstListed);
+  if (Array.isArray(product.images) && product.images[0]) {
+    return pick(product.images[0]?.url);
+  }
+  return "";
+}
+
+function digikalaProductUrl(product) {
+  const uri = product.url?.uri;
+  if (uri) return "https://www.digikala.com" + (uri.startsWith("/") ? uri : "/" + uri);
+  return product.id ? `https://www.digikala.com/product/dkp-${product.id}` : "";
+}
+
+// شکل ویجتیِ جستجوی دسته‌بندی v2 را هم به فهرست تخت محصولات تبدیل می‌کند
+function extractDigikalaWidgets(widgets) {
+  const out = [];
+  if (!Array.isArray(widgets)) return out;
+  for (const w of widgets) {
+    if (w?.type === "vertical_product_listing" && Array.isArray(w.data?.widgets)) {
+      for (const pw of w.data.widgets) {
+        if (pw?.type === "product" && pw.data) out.push(pw.data);
+      }
+    }
+  }
+  return out;
+}
+
+function mapDigikalaProducts(products) {
+  return (products ?? [])
     .map((item) => {
       const product = item.product ?? item;
       const priceObj = product.default_variant?.price ?? {};
@@ -202,16 +232,46 @@ async function searchDigikala(query) {
         title: product.title_fa ?? product.title_en ?? "",
         rawValue: priceObj.selling_price ?? priceObj.rrp_price ?? null,
         sourceId: "digikala",
-        url: `https://www.digikala.com/product/dkp-${product.id}`,
-        image:
-          product.images?.main?.url ??
-          (Array.isArray(product.images) ? product.images[0]?.url : null) ??
-          "",
+        url: digikalaProductUrl(product),
+        image: digikalaImage(product),
         currency: priceObj.currency ?? "",
         priceText: findPriceText(priceObj, product.default_variant, product),
       });
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+async function digikalaGetJson(url) {
+  const res = await fetchWithTimeout(url, {
+    headers: { Accept: "application/json", Referer: "https://www.digikala.com/" },
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.message ?? "";
+    } catch {
+      /* پاسخ خطا JSON نبود */
+    }
+    throw new Error(`HTTP ${res.status}${detail ? ` - ${String(detail).slice(0, 120)}` : ""}`);
+  }
+  return res.json();
+}
+
+async function searchDigikala(query) {
+  const q = encodeURIComponent(query);
+  let body;
+  try {
+    body = await digikalaGetJson(
+      `https://api.digikala.com/v1/search/?page=1&rows=${DIGIKALA_ROWS}&q=${q}`
+    );
+  } catch (err) {
+    // مسیر جایگزین: جستجوی معنایی text-lenz همان ساختار data.products را دارد
+    body = await digikalaGetJson(`https://api.digikala.com/v1/search/text-lenz/?page=1&q=${q}`);
+  }
+  let products = body?.data?.products;
+  if (!Array.isArray(products)) products = extractDigikalaWidgets(body?.data?.widgets);
+  return mapDigikalaProducts(products);
 }
 
 // ترب: API عمومی جستجو — price_text مبنای تومان، فیلد price هم تومانی است
