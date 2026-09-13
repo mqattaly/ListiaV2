@@ -9,9 +9,6 @@ const DEFAULT_BASE_URL = "https://ai.chabokan.net/v1";
 // به‌عنوان مدل پشتیبان خودکار تنظیم شده است.
 const DEFAULT_MODEL = "chabok/free";
 const DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b-free";
-// مدل جستجوی قیمت: مدلی با دسترسی زنده به اینترنت است تا قیمت‌های واقعی را
-// خودش از سایت‌های آنلاین بیابد (با CHABOKAN_AI_PRICE_MODEL قابل تغییر است).
-const DEFAULT_PRICE_MODEL = "dots-studio/dots-3-note-preview:free";
 
 export function aiConfigured() {
   return Boolean(process.env.CHABOKAN_AI_API_KEY?.trim());
@@ -19,11 +16,6 @@ export function aiConfigured() {
 
 export function aiModel() {
   return (process.env.CHABOKAN_AI_MODEL || DEFAULT_MODEL).trim();
-}
-
-/** مدل اختصاصی جستجوی قیمت (با جستجوی اینترنت) — جدا از مدل پشتیبانی. */
-export function aiPriceModel() {
-  return (process.env.CHABOKAN_AI_PRICE_MODEL || DEFAULT_PRICE_MODEL).trim();
 }
 
 // فهرست مدل‌ها به‌ترتیب اولویت (اصلی + پشتیبان). می‌توان با CHABOKAN_AI_MODELS
@@ -166,11 +158,15 @@ function sanitizeHistory(history) {
  * هر کاربرد هوش مصنوعی دیگری در اپ از همین تابع استفاده می‌کند.
  *
  * اگر `opts.model` داده شود، فقط همان مدل صدا زده می‌شود و زنجیره‌ی
- * fallback اجرا نمی‌شود (برای مدل‌های خاص مثل جستجوی قیمت با اینترنت).
+ * fallback اجرا نمی‌شود.
+ *
+ * `opts.webSearch` (پس‌بندهای سازگار با OpenAI/OpenRouter، از جمله درگاه
+ * چابکان): با مقدار true، پلاگین جستجوی اینترنت (`plugins: [{id:"web"}]`)
+ * به درخواست اضافه می‌شود تا مدل نتایج زنده‌ی وب را در پاسخ بکار بگیرد.
  *
  * @param {Array<{role:string, content:string}>} messages
- * @param {{maxTokens?:number, temperature?:number, timeoutMs?:number, label?:string, maxChars?:number, model?:string}} [opts]
- * @returns {Promise<{reply:string, model:string}>}
+ * @param {{maxTokens?:number, temperature?:number, timeoutMs?:number, label?:string, maxChars?:number, model?:string, webSearch?:boolean}} [opts]
+ * @returns {Promise<{reply:string, model:string, annotations:Array}>}
  */
 export async function aiChatComplete(messages, opts = {}) {
   if (!aiConfigured()) {
@@ -183,6 +179,7 @@ export async function aiChatComplete(messages, opts = {}) {
   const temperature = Number(opts.temperature ?? Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3"));
   const timeoutMs = Number(opts.timeoutMs ?? (process.env.CHABOKAN_AI_TIMEOUT_MS || "30000"));
   const maxChars = Number(opts.maxChars ?? 4000);
+  const webSearch = Boolean(opts.webSearch);
   const baseUrl = (process.env.CHABOKAN_AI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
   const pinned = String(opts.model ?? "").trim();
   const models = pinned ? [pinned] : aiModels();
@@ -194,6 +191,9 @@ export async function aiChatComplete(messages, opts = {}) {
     try {
       const body = { model, messages, temperature, max_tokens: maxTokens };
       if (/gpt-oss/i.test(model)) body.reasoning_effort = "low";
+      // فعال‌سازی جستجوی اینترنت (مستندات درگاه سازگار با OpenAI / OpenRouter):
+      // پلاگین «web» نتایج زنده‌ی وب را به مدل می‌دهد تا قیمت‌ها به‌روز باشند.
+      if (webSearch) body.plugins = [{ id: "web", max_results: 8 }];
       res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         signal: controller.signal,
@@ -229,25 +229,39 @@ export async function aiChatComplete(messages, opts = {}) {
         `${label}: خطای ${res.status} از درگاه چابکان (مدل ${model})`,
         detail ? `→ ${String(detail).slice(0, 200)}` : ""
       );
+      const clientErr = res.status >= 400 && res.status < 500;
       const e = new Error(
         res.status === 401 || res.status === 403
           ? "کلید هوش مصنوعی پذیرفته نشد؛ لطفاً تنظیمات سرور را بررسی کنید."
-          : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
+          : clientErr
+            ? `درگاه هوش مصنوعی درخواست را نپذیرفت (${res.status})؛ شناسه‌ی مدل و تنظیمات سرور را بررسی کنید.`
+            : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
       );
-      e.status = res.status === 401 || res.status === 403 ? res.status : 502;
-      e.retryable = !(res.status === 401 || res.status === 403);
+      // خطاهای ۴xx وضعیت واقعی را نگه می‌دارند (تا لایه‌های بالاتر بتوانند
+      // تشخیص دهند مشکل از پارامتر/مدل است نه از دسترس‌نبودی سرویس)
+      e.status = clientErr ? res.status : 502;
+      e.retryable = !clientErr || res.status === 429;
       throw e;
     }
 
     const b = await res.json().catch(() => null);
-    const reply = b?.choices?.[0]?.message?.content?.toString().trim();
+    const message = b?.choices?.[0]?.message ?? {};
+    const reply = message.content?.toString().trim();
     if (!reply) {
       const e = new Error("پاسخی از هوش مصنوعی دریافت نشد؛ دوباره تلاش کنید.");
       e.status = 502;
       e.retryable = true;
       throw e;
     }
-    return { reply: reply.slice(0, maxChars), model };
+    // وقتی جستجوی اینترنت فعال است، لینک‌های واقعی‌ای که مدل از نتایج وب
+    // استفاده کرده در annotations (نوع url_citation) برمی‌گردد.
+    const annotations = (Array.isArray(message.annotations) ? message.annotations : [])
+      .filter((a) => a?.type === "url_citation" && a?.url_citation?.url)
+      .map((a) => ({
+        url: String(a.url_citation.url),
+        title: String(a.url_citation.title ?? ""),
+      }));
+    return { reply: reply.slice(0, maxChars), model, annotations };
   };
 
   // مدل اصلی و در صورت خطای موقت، مدل(های) پشتیبان

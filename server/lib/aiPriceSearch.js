@@ -3,11 +3,19 @@
 // هوش مصنوعی خودش در اینترنت جستجو می‌کند، قیمت‌های زنده از هر سایتی که
 // مناسب بداند را جمع می‌کند و برمی‌گرداند. شغلِ کاربر هم به AI داده می‌شود تا
 // سایت‌ها و گونه‌ی کالا را بر اساس همان حرفه انتخاب کند.
+//
+// جستجوی اینترنت: طبق مستندات درگاه سازگار با OpenAI (OpenRouter/چابکان)،
+// حالت جستجوی وب با پلاگین `web` در بدنه‌ی درخواست فعال می‌شود تا مدل
+// نتایج زنده‌ی وب را ببیند و قیمت‌های به‌روز بدهد. مدلِ استفاده‌شده هم
+// دقیقاً همان CHABOKAN_AI_MODEL است.
+// اگر درگاه پلاگین را نپذیرد (خطای ۴۰۰)، بی‌صدا بدون پلاگین امتحان
+// دوباره می‌شود.
+//
 // خروجی همان شکلی است که قبل‌تر priceSearch برمی‌گرداند تا فرانت بدون
 // تغییر کار کند (results با price/price_label/url/image/source_label).
 // منطق تبدیل قیمت و تقسیم بر تعدادِ صفحه‌ی برآورد دست‌نخورده باقی می‌ماند؛
 // فقط «جستجو» کاملاً با AI انجام می‌شود.
-import { aiChatComplete, aiConfigured, aiPriceModel } from "./aiSupport.js";
+import { aiChatComplete, aiConfigured, aiModel } from "./aiSupport.js";
 import { parseAmount, formatAmount, safeHttpUrl } from "./utils.js";
 
 const MAX_RESULTS = 10;
@@ -162,28 +170,37 @@ export async function smartPriceSearch({ job = "", query = "" } = {}) {
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_TTL) return cached.data;
 
-  const model = aiPriceModel();
+  const model = aiModel(); // مدلِ تنظیم‌شده در CHABOKAN_AI_MODEL
   const jobLine = jobText
     ? `شغل/حرفه‌ی من: «${jobText}» — سایت‌ها و گونه‌ی کالا را بر اساس همین شغل انتخاب کن.\n`
     : "";
   const userMessage = `${jobLine}کالایی که قیمتش را می‌خواهم: «${raw}»
 قیمت‌های زنده و واقعی را در اینترنت جستجو کن و خروجی JSON بده.`;
 
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: userMessage },
+  ];
+  const callOpts = {
+    model,
+    maxTokens: 3000,
+    temperature: 0.2,
+    timeoutMs: TIMEOUT_MS,
+    label: "جستجوی قیمت AI",
+    maxChars: 12000,
+  };
+
   // خطای درگاه AI (503/502/504) با همان پیام فارسی به کاربر می‌رسد
-  const { reply } = await aiChatComplete(
-    [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
-    ],
-    {
-      model,
-      maxTokens: 3000,
-      temperature: 0.2,
-      timeoutMs: TIMEOUT_MS,
-      label: "جستجوی قیمت AI",
-      maxChars: 12000,
-    }
-  );
+  let reply;
+  let annotations = [];
+  try {
+    ({ reply, annotations } = await aiChatComplete(messages, { ...callOpts, webSearch: true }));
+  } catch (err) {
+    // اگر درگاه پلاگین جستجوی وب را نپذیرد (HTTP 400)، بدون پلاگین امتحان دوباره می‌شود
+    if (err?.status !== 400) throw err;
+    console.warn("جستجوی قیمت AI: پلاگین جستجوی اینترنت پذیرفته نشد؛ بدون آن تلاش دوباره می‌شود.");
+    ({ reply, annotations } = await aiChatComplete(messages, callOpts));
+  }
 
   const parsed = extractJson(reply);
   const rawItems = Array.isArray(parsed?.results) ? parsed.results : [];
@@ -208,6 +225,23 @@ export async function smartPriceSearch({ job = "", query = "" } = {}) {
     seenTitle.add(tk);
     results.push(r);
   });
+
+  // اگر مدل لینک نداده باشد، از لینک‌های واقعی‌ای که در نتایج جستجوی وب
+  // (annotations) استفاده کرده، نزدیک‌ترین عنوان را پیدا و تکمیل می‌کنیم
+  if (annotations.length) {
+    for (const r of results) {
+      if (r.url) continue;
+      const words = r.title.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+      const hit = words.length
+        ? annotations.find((a) => {
+            const t = (a.title || "").toLowerCase();
+            const u = (a.url || "").toLowerCase();
+            return words.some((w) => t.includes(w) || u.includes(w));
+          })
+        : null;
+      if (hit) r.url = hit.url;
+    }
+  }
 
   // ارزان‌ترین اول
   results.sort((a, b) => a.price - b.price || a._order - b._order);
