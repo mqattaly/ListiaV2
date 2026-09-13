@@ -40,18 +40,21 @@ setInterval(() => {
   for (const [k, v] of cache) if (now - v.at > CACHE_TTL) cache.delete(k);
 }, 60_000).unref?.();
 
-// پرامپت عمداً کوتاه است: هر token اضافی، کندیِ پاسخ را بیشتر می‌کند
-const SYSTEM_PROMPT = `دستیار جستجوی قیمت کالا در بازار آنلاین ایران؛ قیمت را فقط از نتایج زنده‌ی جستجوی اینترنت بیاور.
-شغلِ کاربر را در انتخاب سایت و گونه‌ی کالا رعایت کن (گونه‌ی حرفه‌ای/رایجِ همان شغل).
+// پرامپت عمداً کوتاه و مستقیم است (مثل پرامپت ساده‌ای که در چت چابکان
+// سریع جواب می‌دهد): دستور کم، محدودیت کم، خروجی فشرده با کلیدهای کوتاه
+// (توکنِ دی‌کد کمتر = پاسخ سریع‌تر).
+const SYSTEM_PROMPT = `قیمت‌یاب بازار آنلاین ایران؛ قیمت‌های به‌روز را فقط از نتایج زنده‌ی جستجوی اینترنت بیاور و شغلِ کاربر را در انتخاب سایت رعایت کن.
 
-قوانین:
-- ۳ تا ۵ نتیجه از سایت‌های واقعی و ترجیحاً متفاوت؛ اگر قیمت واقعی ندیدی، نتایج کمتر یا خالی — اختراع قیمت/عنوان/لینک/تصویر ممنوع.
-- url و image دقیقاً همان چیزی باشد که در نتایج یا صفحه دیده‌ای (image هر جا نبود، خالی بگذار).
-- price: عدد صحیحِ تومان (ریال را ۱۰ تقسیم کن).
-- title حداکثر ۵۰ نویسه.
-- پاسخ فقط یک JSON فشرده: بدون متن، بدون توضیح، بدون فاصله‌ی اضافه.
+فقط یک JSON فشرده بده، بدون هیچ متن دیگر:
+{"r":[{"p":1250000,"t":"تی حوله‌ای صنعتی ۱۲ عددی","u":"https://...","s":"دیجی‌کالا","i":"https://..."}]}
 
-{"results":[{"title":"...","price":1250000,"url":"https://...","source":"نام سایت","image":"https://..."}]}`;
+- p: قیمت به تومان، عدد صحیح (ریال ÷۱۰؛ اگر بازه بود، حدِ پایین)
+- t: عنوان کوتاه کالا (حداکثر ۴۰ نویسه؛ اگر قیمت برای بسته/کارتن است، در همین‌جا بنویس)
+- u: لینک دقیقِ صفحه‌ای که قیمت را از آن خواندی
+- s: نام سایت
+- i: لینک تصویر کالا (اگر ندیدی، خالی)
+- ۳ تا ۶ نتیجه، ترجیحاً سایت‌های متفاوت؛ قیمتِ کالای نامرتبط یا مشابهِ دیگر نده و چیزی اختراع نکن
+`;
 
 /** استخراج JSON از پاسخ مدل (با تحمل کد‌فنس/متن اضافی). */
 function extractJson(text) {
@@ -150,11 +153,12 @@ async function fetchPageImage(pageUrl) {
 /** نتیجه‌ی خام مدل → شکل خروجی priceSearch (قیمت عددی و تومانی). */
 function normalizeResult(item, index) {
   if (!item || typeof item !== "object") return null;
-  const title = String(item.title ?? item.name ?? "").trim().slice(0, 220);
+  // کلیدهای جدیدِ فشرده (p/t/u/s/i) + کلیدهای بلندِ قدیمی (سازگاری با هر فرمت مدل)
+  const title = String(item.t ?? item.title ?? item.name ?? "").trim().slice(0, 220);
   if (!title) return null;
 
   // قیمت: عدد خالص (Persian/Arabic digits و جداکننده هم می‌پذیرد) — همیشه تومان
-  const rawPrice = item.price ?? item.amount ?? item.price_toman ?? item.value ?? null;
+  const rawPrice = item.p ?? item.price ?? item.amount ?? item.price_toman ?? item.value ?? null;
   let price = typeof rawPrice === "number" ? Math.round(rawPrice) : null;
   if (price === null) {
     const text = String(rawPrice ?? "").trim();
@@ -169,9 +173,9 @@ function normalizeResult(item, index) {
   if (price === null || !Number.isFinite(price) || price <= 0) return null;
   price = Math.round(price);
 
-  const url = safeHttpUrl(item.url ?? item.link ?? item.href ?? "") || "";
-  const source = String(item.source ?? item.site ?? item.store ?? "").trim().slice(0, 60) || "فروشگاه آنلاین";
-  const image = safeHttpUrl(item.image ?? item.img ?? item.photo ?? "") || "";
+  const url = safeHttpUrl(item.u ?? item.url ?? item.link ?? item.href ?? "") || "";
+  const source = String(item.s ?? item.source ?? item.site ?? item.store ?? "").trim().slice(0, 60) || "فروشگاه آنلاین";
+  const image = safeHttpUrl(item.i ?? item.image ?? item.img ?? item.photo ?? "") || "";
 
   return {
     title,
@@ -251,7 +255,8 @@ export async function smartPriceSearch({ job = "", query = "" } = {}) {
   }
 
   const parsed = extractJson(reply);
-  const rawItems = Array.isArray(parsed?.results) ? parsed.results : [];
+  // فرمت جدید: {"r":[...]} — فرمت قدیمی: {"results":[...]} (هر دو پذیرفته می‌شود)
+  const rawItems = Array.isArray(parsed?.r) ? parsed.r : Array.isArray(parsed?.results) ? parsed.results : [];
   if (!rawItems.length && parsed === null) {
     const err = new Error("پاسخ هوش مصنوعی قابل‌خواندن نبود؛ دوباره تلاش کنید.");
     err.status = 502;
