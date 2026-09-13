@@ -246,12 +246,20 @@ export async function aiChatComplete(messages, opts = {}) {
     }
 
     const b = await res.json().catch(() => null);
-    const message = b?.choices?.[0]?.message ?? {};
+    const choice = b?.choices?.[0] ?? {};
+    const message = choice.message ?? {};
     const reply = message.content?.toString().trim();
     if (!reply) {
+      // پاسخ خالی: معمولاً finish_reason=length یعنی مدل سقف توکن را در
+      // «تفکر»/جستجوی وب خرج کرده و به متن نرسیده (برای دیباگ در کنسول)
+      console.error(
+        `${label}: پاسخ خالی از مدل ${model} → finish_reason=${choice.finish_reason ?? "?"} ` +
+          `usage=${JSON.stringify(b?.usage ?? {})} model_usage=${JSON.stringify(b?.usage?.completion_tokens_details ?? "")}`
+      );
       const e = new Error("پاسخی از هوش مصنوعی دریافت نشد؛ دوباره تلاش کنید.");
       e.status = 502;
       e.retryable = true;
+      e.finishReason = choice.finish_reason ?? null;
       throw e;
     }
     // وقتی جستجوی اینترنت فعال است، لینک‌های واقعی‌ای که مدل از نتایج وب

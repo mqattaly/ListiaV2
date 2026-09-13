@@ -217,7 +217,10 @@ export async function smartPriceSearch({ job = "", query = "" } = {}) {
   ];
   const callOpts = {
     model,
-    maxTokens: 1500, // خروجی فشرده‌ی ۳ تا ۵ نتیجه همین قدر کافی است
+    // سقف توکن فقط «سقف» است و خروجی کوتاه را کند نمی‌کند؛ اما برای مدل‌هایی که
+    // در حین جستجوی وب reasoning می‌کنند، سقف کوچک باعث پاسخِ خالی (length)
+    // می‌شود — به‌همین‌دلیل ۳۰۰ نگه داشته می‌شود.
+    maxTokens: 3000,
     temperature: 0.2,
     timeoutMs: TIMEOUT_MS,
     label: "جستجوی قیمت AI",
@@ -231,9 +234,20 @@ export async function smartPriceSearch({ job = "", query = "" } = {}) {
     ({ reply, annotations } = await aiChatComplete(messages, { ...callOpts, webSearch: true }));
   } catch (err) {
     // اگر درگاه پلاگین جستجوی وب را نپذیرد (HTTP 400)، بدون پلاگین امتحان دوباره می‌شود
-    if (err?.status !== 400) throw err;
-    console.warn("جستجوی قیمت AI: پلاگین جستجوی اینترنت پذیرفته نشد؛ بدون آن تلاش دوباره می‌شود.");
-    ({ reply, annotations } = await aiChatComplete(messages, callOpts));
+    if (err?.status === 400) {
+      console.warn("جستجوی قیمت AI: پلاگین جستجوی اینترنت پذیرفته نشد؛ بدون آن تلاش دوباره می‌شود.");
+      ({ reply, annotations } = await aiChatComplete(messages, callOpts));
+    } else if (err?.finishReason === "length") {
+      // مدل سقف توکن را در reasoning/جستجو خرچ کرده و متن ننوشته؛ با سقف بزرگ‌تر یک‌بار دیگر
+      console.warn("جستجوی قیمت AI: پاسخ با سقف توکن پر شد (length)؛ با maxTokens=6000 تلاش دوباره می‌شود.");
+      ({ reply, annotations } = await aiChatComplete(messages, {
+        ...callOpts,
+        webSearch: true,
+        maxTokens: 6000,
+      }));
+    } else {
+      throw err;
+    }
   }
 
   const parsed = extractJson(reply);
