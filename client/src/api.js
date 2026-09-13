@@ -144,7 +144,8 @@ async function request(path, { method = "GET", body, formData, timeout } = {}) {
 }
 
 export const api = {
-  get: (path) => request(path),
+  // get(path, { timeout }) — جستجوی قیمت با AI ممکن است تا یک دقیقه طول بکشد
+  get: (path, opts) => request(path, opts ?? {}),
   post: (path, body) => request(path, { method: "POST", body: body ?? {} }),
   upload: (path, formData) => request(path, { method: "POST", formData }),
 };

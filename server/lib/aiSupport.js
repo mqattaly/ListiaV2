@@ -45,13 +45,13 @@ const KNOWLEDGE = `
 - برآورد قیمت (تخمین قیمت): برای هر محصول قیمت واحد و «تعداد در واحد» (مثلاً در کارتن/بسته چندتاست)
   ثبت می‌شود؛ می‌توان سقف بودجه گذاشت و نوار پیشرفت بودجه را دید، اقلام را به «خرید بعدی» فرستاد
   یا با دکمه‌ی «برش لیست تا سقف بودجه» خودکار لیست را طوری کوتاه کرد که جمع خرید داخل بودجه بنشیند.
-- جستجوی قیمت زنده: از داخل صفحه‌ی برآورد، روی دکمه‌ی ذره‌بین هر محصول می‌توان قیمت آنلاین را
-  از فروشگاه‌های دیجی‌کالا، ترب، باسلام و «تعداد بالا (عمده)» جستجو و با یک کلیک قیمت و لینک را ثبت کرد.
-  با هاور روی عکس نتایج، عکس بزرگ نمایش داده می‌شود و می‌توان منبع را فیلتر کرد.
-- جستجوی قیمت هوشمند بر اساس شغل: در پنجره‌ی جستجوی قیمت می‌توان شغل/حرفه را وارد کرد؛ هوش مصنوعی
-  نام کالا را به‌صورت حرفه‌ای/صنعتیِ همان شغل بازنویسی می‌کند (مثلاً در خدمات نظافت، «تی حوله‌ای» به
-  «تی شور حوله‌ای صنعتی» و معادل‌های بازارش بسط می‌یابد) و منبع مناسب (دیجی‌کالا، ترب، باسلام یا تعداد
-  بالا) را برمی‌گزیند؛ قیمت واقعی همچنان زنده از خود سایت‌ها خوانده می‌شود.
+- جستجوی قیمت زنده با هوش مصنوعی: از داخل صفحه‌ی برآورد، روی دکمه‌ی ذره‌بین هر محصول می‌توان
+  قیمت آنلاین را جستجو کرد؛ هوش مصنوعی خودش در اینترنت جستجو می‌کند، قیمت‌های زنده از چند
+  فروشگاه/سایت مناسب را می‌آورد و با یک کلیک قیمت و لینک ثبت می‌شود. با هاور روی عکس نتایج
+  (هر جا که عکسی بود)، عکس بزرگ نمایش داده می‌شود. این جستجو ممکن است ۱۰ تا ۶۰ ثانیه طول بکشد.
+- جستجوی قیمت بر اساس شغل: در پنجره‌ی جستجوی قیمت می‌توان شغل/حرفه را وارد کرد؛ هوش مصنوعی
+  بر اساس همان شغل سایت‌های مناسب را انتخاب می‌کند و گونه‌ی حرفه‌ای/صنعتیِ کالا را جستجو می‌کند
+  (مثلاً برای شغل خدمات نظافت، «تی حوله‌ای» را به‌عنوان «تی حوله‌ای صنعتی/شور» در سایت‌های مناسب می‌جود).
 - جستجوی سراسری (کلید میانبر Ctrl+K یا دکمه جستجو در منو): یافتن سریع محصول و تأمین‌کننده.
 - ایمپورت اکسل/CSV: ورود گروهی تأمین‌کننده و محصول از فایل اکسل در بخش «ایمپورت اکسل»
   (فایل نمونه داخل همان صفحه هست؛ خطاهای هر ردیف جداگانه گزارش می‌شود).
@@ -102,8 +102,8 @@ const KNOWLEDGE = `
 ## مشکلات رایج و راه‌حل
 - دکمه تأیید/ارسال ایمیل واکنش نمی‌دهد: ارسال ایمیل در پس‌زمینه انجام می‌شود؛ پاسخ فوری است ولی
   رسیدن ایمیل بسته به سرور ایمیل چند ثانیه تا چند دقیقه طول می‌کشد؛ Spam را چک کن.
-- قیمت جستجوی آنلاین پیدا نشد: عبارت را کوتاه‌تر و کلی‌تر کن یا منبع دیگری انتخاب کن؛
-  اتصال اینترنت دستگاه باید برقرار باشد.
+- قیمت جستجوی آنلاین پیدا نشد: عبارت را کوتاه‌تر و رایج‌تر بنویس و چند ثانیه بعد دوباره جستجو
+  کن (جستجو با هوش مصنوعی است و ممکن است گاهی طول بکشد یا نتایج کمتری بدهد).
 - رمز عبور را فراموش کرده‌ام یا نیاز به پیگیری خرید/لایسنس/بازگشت وجه: باید توسط پشتیبانی انسانی
   پیگیری شود.
 
@@ -157,9 +157,16 @@ function sanitizeHistory(history) {
  * گفتگوی خام با درگاه چابکان (سازگار با OpenAI) با مدل اصلی و fallback خودکار.
  * هر کاربرد هوش مصنوعی دیگری در اپ از همین تابع استفاده می‌کند.
  *
+ * اگر `opts.model` داده شود، فقط همان مدل صدا زده می‌شود و زنجیره‌ی
+ * fallback اجرا نمی‌شود.
+ *
+ * `opts.webSearch` (پس‌بندهای سازگار با OpenAI/OpenRouter، از جمله درگاه
+ * چابکان): با مقدار true، پلاگین جستجوی اینترنت (`plugins: [{id:"web"}]`)
+ * به درخواست اضافه می‌شود تا مدل نتایج زنده‌ی وب را در پاسخ بکار بگیرد.
+ *
  * @param {Array<{role:string, content:string}>} messages
- * @param {{maxTokens?:number, temperature?:number, timeoutMs?:number, label?:string, maxChars?:number}} [opts]
- * @returns {Promise<{reply:string, model:string}>}
+ * @param {{maxTokens?:number, temperature?:number, timeoutMs?:number, label?:string, maxChars?:number, model?:string, webSearch?:boolean}} [opts]
+ * @returns {Promise<{reply:string, model:string, annotations:Array}>}
  */
 export async function aiChatComplete(messages, opts = {}) {
   if (!aiConfigured()) {
@@ -172,8 +179,10 @@ export async function aiChatComplete(messages, opts = {}) {
   const temperature = Number(opts.temperature ?? Number(process.env.CHABOKAN_AI_TEMPERATURE || "0.3"));
   const timeoutMs = Number(opts.timeoutMs ?? (process.env.CHABOKAN_AI_TIMEOUT_MS || "30000"));
   const maxChars = Number(opts.maxChars ?? 4000);
+  const webSearch = Boolean(opts.webSearch);
   const baseUrl = (process.env.CHABOKAN_AI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const models = aiModels();
+  const pinned = String(opts.model ?? "").trim();
+  const models = pinned ? [pinned] : aiModels();
 
   const callOnce = async (model) => {
     const controller = new AbortController();
@@ -182,6 +191,10 @@ export async function aiChatComplete(messages, opts = {}) {
     try {
       const body = { model, messages, temperature, max_tokens: maxTokens };
       if (/gpt-oss/i.test(model)) body.reasoning_effort = "low";
+      // فعال‌سازی جستجوی اینترنت (مستندات درگاه سازگار با OpenAI / OpenRouter):
+      // پلاگین «web» نتایج زنده‌ی وب را به مدل می‌دهد تا قیمت‌ها به‌روز باشند.
+      // max_results مودبانه محدود است تا context و زمان پاسخ فربه نشود.
+      if (webSearch) body.plugins = [{ id: "web", max_results: 6 }];
       res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         signal: controller.signal,
@@ -217,25 +230,47 @@ export async function aiChatComplete(messages, opts = {}) {
         `${label}: خطای ${res.status} از درگاه چابکان (مدل ${model})`,
         detail ? `→ ${String(detail).slice(0, 200)}` : ""
       );
+      const clientErr = res.status >= 400 && res.status < 500;
       const e = new Error(
         res.status === 401 || res.status === 403
           ? "کلید هوش مصنوعی پذیرفته نشد؛ لطفاً تنظیمات سرور را بررسی کنید."
-          : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
+          : clientErr
+            ? `درگاه هوش مصنوعی درخواست را نپذیرفت (${res.status})؛ شناسه‌ی مدل و تنظیمات سرور را بررسی کنید.`
+            : "سرویس هوش مصنوعی موقتاً در دسترس نیست؛ کمی بعد دوباره تلاش کنید."
       );
-      e.status = res.status === 401 || res.status === 403 ? res.status : 502;
-      e.retryable = !(res.status === 401 || res.status === 403);
+      // خطاهای ۴xx وضعیت واقعی را نگه می‌دارند (تا لایه‌های بالاتر بتوانند
+      // تشخیص دهند مشکل از پارامتر/مدل است نه از دسترس‌نبودی سرویس)
+      e.status = clientErr ? res.status : 502;
+      e.retryable = !clientErr || res.status === 429;
       throw e;
     }
 
     const b = await res.json().catch(() => null);
-    const reply = b?.choices?.[0]?.message?.content?.toString().trim();
+    const choice = b?.choices?.[0] ?? {};
+    const message = choice.message ?? {};
+    const reply = message.content?.toString().trim();
     if (!reply) {
+      // پاسخ خالی: معمولاً finish_reason=length یعنی مدل سقف توکن را در
+      // «تفکر»/جستجوی وب خرج کرده و به متن نرسیده (برای دیباگ در کنسول)
+      console.error(
+        `${label}: پاسخ خالی از مدل ${model} → finish_reason=${choice.finish_reason ?? "?"} ` +
+          `usage=${JSON.stringify(b?.usage ?? {})} model_usage=${JSON.stringify(b?.usage?.completion_tokens_details ?? "")}`
+      );
       const e = new Error("پاسخی از هوش مصنوعی دریافت نشد؛ دوباره تلاش کنید.");
       e.status = 502;
       e.retryable = true;
+      e.finishReason = choice.finish_reason ?? null;
       throw e;
     }
-    return { reply: reply.slice(0, maxChars), model };
+    // وقتی جستجوی اینترنت فعال است، لینک‌های واقعی‌ای که مدل از نتایج وب
+    // استفاده کرده در annotations (نوع url_citation) برمی‌گردد.
+    const annotations = (Array.isArray(message.annotations) ? message.annotations : [])
+      .filter((a) => a?.type === "url_citation" && a?.url_citation?.url)
+      .map((a) => ({
+        url: String(a.url_citation.url),
+        title: String(a.url_citation.title ?? ""),
+      }));
+    return { reply: reply.slice(0, maxChars), model, annotations };
   };
 
   // مدل اصلی و در صورت خطای موقت، مدل(های) پشتیبان

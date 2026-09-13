@@ -1,34 +1,62 @@
-// ─── جستجوی قیمت هوشمند شغل‌محور ───────────────────────────────────────────
-// کاربر شغلش را انتخاب می‌کند و نام یک کالا را می‌زند؛ هوش مصنوعی عبارت را
-// برای همان حرفه بازنویسی می‌کند (واژه‌های صنعتی/حرفه‌ای، گونه‌ی مناسب کار)
-// و منابع مناسب را برمی‌گزیند. خود AI به اینترنت دست ندارد؛ قیمت واقعی و
-// قابل‌کلیک همچنان با جستجوگرهای بازار (priceSearch) گرفته می‌شود.
-// اگر AI فعال نباشد یا خطا بدهد، جست‌وجو بی‌صدا به حالت عادی برمی‌گردد.
-import { aiChatComplete, aiConfigured } from "./aiSupport.js";
-import { priceSearch, PRICE_SOURCES } from "./priceSearch.js";
-import { normalizeName } from "./utils.js";
+// ─── جستجوی قیمت زنده با هوش مصنوعی (کاملاً توسط AI) ───────────────────────
+// قیمت‌ها از APIهای سایت‌های خاص (دیجی‌کالا/ترب/باسلام/…) خوانده نمی‌شوند؛
+// هوش مصنوعی خودش در اینترنت جستجو می‌کند و قیمت‌های زنده از هر سایتی که
+// مناسب بداند (بر اساس شغلِ کاربر) جمع می‌کند.
+//
+// سرعت: پرامپت عمداً فشرده نگه داشته می‌شود تا مدل کوتاه و سریع پاسخ دهد
+// (۳ تا ۵ نتیجه، عنوان کوتاه، JSON فشرده) و تعداد نتایج وب پلاگین محدود است.
+// جستجوی اینترنت طبق مستندات درگاه سازگار با OpenAI (OpenRouter/چابکان)
+// با پلاگین `web` در بدنه‌ی درخواست فعال می‌شود؛ مدل CHABOKAN_AI_MODEL است.
+// اگر درگاه پلاگین را نپذیرد (خطای ۴۰۰)، بی‌صدا بدون پلاگین امتحان می‌شود.
+//
+// تصویر: مدل image صفحه را (هر جا در نتایج دید) می‌دهد؛ اگر نداد، سرور
+// og:image همان URL را با timeout کوتاه می‌گیرد (فیل‌بک بی‌صدا).
+//
+// خروجی هم‌شکل priceSearch است تا فرانت بدون تغییر کار کند.
+// منطق قیمت صفحه‌ی برآورد (تبدیل/تقسیم بر تعداد/بودجه) دست‌نخورده است.
+import { aiChatComplete, aiConfigured, aiModel } from "./aiSupport.js";
+import { parseAmount, formatAmount, safeHttpUrl } from "./utils.js";
 
-const SOURCE_IDS = Object.keys(PRICE_SOURCES);
-const MAX_VARIANTS = 3; // شامل عبارت اصلی کاربر
+const MAX_RESULTS = 10;
+const TIMEOUT_MS = 90_000; // سقف کلی — پاسخ فشرده معمولاً زودتر تمام می‌شود
+const CACHE_TTL = 60_000;
+const CACHE_MAX = 200;
+const IMAGE_FETCH_TIMEOUT = 2500; // هر صفحه‌ی تصویر حداکثر ۲.۵ ثانیه
+const IMAGE_FETCH_MAX = 4; // فیل‌بک تصویر فقط برای ۴ نتیجه‌ی اول
+const cache = new Map();
 
-const STRATEGY_SYSTEM = `تو دستیار جست‌وجوی کالا در بازار آنلاین ایران هستی. کاربر شغل/حرفه‌ی خودش و نام یک کالا را می‌دهد؛
-تو عبارت جست‌وجو را طوری بازنویسی می‌کنی که دقیقاً همان گونه‌ی کالا که در آن شغل استفاده می‌شود در فروشگاه‌های آنلاین پیدا شود.
+function cacheSet(key, data) {
+  cache.set(key, { at: Date.now(), data });
+  if (cache.size <= CACHE_MAX) return;
+  const now = Date.now();
+  for (const [k, v] of cache) {
+    if (cache.size <= CACHE_MAX * 0.8) break;
+    if (now - v.at > CACHE_TTL) cache.delete(k);
+  }
+  while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.at > CACHE_TTL) cache.delete(k);
+}, 60_000).unref?.();
 
-قوانین سخت:
-- فقط و فقط یک شیء JSON معتبر بده، بدون متن اضافه یا کد‌فنس.
-- queries: بین ۲ تا ${MAX_VARIANTS} عبارت فارسی، کوتاه و قابل جست‌وجو در فروشگاه؛ عبارت اول باید خودِ نام کالای کاربر (با املای رایج) باشد.
-  بقیه عبارت‌ها می‌توانند معادل صنعتی/حرفه‌ای، گونه‌ی مناسب شغل یا نام رایج بازار باشند (مثلاً برای شغل خدمات نظافت و «تی حوله‌ای»:
-  «تی شور حوله‌ای صنعتی»، «دسته تی حوله‌ای»). هرگز به کالای دیگری منحرف نشو و واژه‌های اصلی نام کالا را حفظ کن.
-- sources: ترتیب منابع مناسبِ این کالا در این شغل از میان همین شناسه‌ها:
-  digikala (ابزار، تجهیزات برقی/دیجیتال/صنعتی سبک و کالای برنددار)،
-  torob (کالای عمومی خرده‌فروشی، تقریباً همه‌چیز)،
-  basalam (کالای سنتی، صنفی، دستی و محلی)،
-  tedadbala (خرید عمده و مواد مصرفی انبوه).
-  بین ۲ تا ۴ شناسه بده؛ معمولاً جست‌وجوی عمومی و تخصصی هر دو باشند.
+// پرامپت عمداً کوتاه و مستقیم است (مثل پرامپت ساده‌ای که در چت چابکان
+// سریع جواب می‌دهد): دستور کم، محدودیت کم، خروجی فشرده با کلیدهای کوتاه
+// (توکنِ دی‌کد کمتر = پاسخ سریع‌تر).
+const SYSTEM_PROMPT = `قیمت‌یاب بازار آنلاین ایران؛ قیمت‌های به‌روز را فقط از نتایج زنده‌ی جستجوی اینترنت بیاور و شغلِ کاربر را در انتخاب سایت رعایت کن.
 
-ساختار خروجی:
-{"queries":["نام کالای کاربر","گونه‌ی حرفه‌ای آن"],"sources":["torob","digikala","basalam","tedadbala"]}`;
+فقط یک JSON فشرده بده، بدون هیچ متن دیگر:
+{"r":[{"p":1250000,"t":"تی حوله‌ای صنعتی ۱۲ عددی","u":"https://...","s":"دیجی‌کالا","i":"https://..."}]}
 
+- p: قیمت به تومان، عدد صحیح (ریال ÷۱۰؛ اگر بازه بود، حدِ پایین)
+- t: عنوان کوتاه کالا (حداکثر ۴۰ نویسه؛ اگر قیمت برای بسته/کارتن است، در همین‌جا بنویس)
+- u: لینک دقیقِ صفحه‌ای که قیمت را از آن خواندی
+- s: نام سایت
+- i: لینک تصویر کالا (اگر ندیدی، خالی)
+- ۳ تا ۶ نتیجه، ترجیحاً سایت‌های متفاوت؛ قیمتِ کالای نامرتبط یا مشابهِ دیگر نده و چیزی اختراع نکن
+`;
+
+/** استخراج JSON از پاسخ مدل (با تحمل کد‌فنس/متن اضافی). */
 function extractJson(text) {
   if (!text) return null;
   let t = String(text).trim();
@@ -68,162 +96,238 @@ function extractJson(text) {
   return null;
 }
 
-/**
- * استراتژی جست‌وجوی هوشمند برای یک کالا در یک شغل.
- * همیشه لااقل عبارت اصلی کاربر و همه‌ی منابع برمی‌گردد (پس زمینه امن دارد).
- * @returns {Promise<{queries:string[], sources:string[], model:string|null}>}
- */
-export async function buildSearchStrategy({ job = "", query = "" } = {}) {
-  const q = String(query ?? "").trim().slice(0, 120);
-  const fallback = { queries: [q], sources: SOURCE_IDS, model: null };
-  if (!q) return fallback;
-  if (!aiConfigured()) return fallback;
+function slugSource(label) {
+  const s = String(label ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06FF]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return s || "site";
+}
 
-  const jobText = String(job ?? "").trim().slice(0, 120);
-  if (jobText.length < 2) return fallback;
+// ─── تصویر محصول: فیل‌بک سروری از og:image صفحه ──────────────────────────────
+// نتایج پلاگین وب معمولاً متن‌اند و image همیشه در دسترس مدل نیست؛ اگر مدل
+// تصویر نداده باشد، سرور og:image همان URL را با timeout کوتاه می‌گیرد.
+const IMAGE_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+const IMAGE_TAG_RES = [
+  /<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"'>]+)["']/i,
+  /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"'>]+)["']/i,
+  /<meta[^>]+content=["']([^"'>]+)["'][^>]+property=["']og:image["']/i,
+  /<meta[^>]+name=["']twitter:image[:\w]*["'][^>]+content=["']([^"'>]+)["']/i,
+  /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"'>]+)["']/i,
+];
 
+async function fetchPageImage(pageUrl) {
   try {
-    const { reply, model } = await aiChatComplete(
-      [
-        { role: "system", content: STRATEGY_SYSTEM },
-        {
-          role: "user",
-          content: `شغل من: «${jobText}»
-کالای مورد جست‌وجو: «${q}»
-عبارت‌ها و ترتیب منابع را فقط به‌صورت JSON بده.`,
-        },
-      ],
-      { maxTokens: 500, temperature: 0.25, timeoutMs: 20000, label: "جستجوی شغلی AI", maxChars: 2000 }
-    );
-    const parsed = extractJson(reply);
-
-    // عبارت‌ها: اول عبارت اصلی کاربر، بعد عبارت‌های معتبر مدل (بدون تکرار)
-    const queries = [q];
-    const rawQueries = Array.isArray(parsed?.queries) ? parsed.queries : [];
-    for (const v of rawQueries) {
-      const s = String(v ?? "").trim().slice(0, 80);
-      if (s.length < 2) continue;
-      if (queries.some((x) => normalizeName(x) === normalizeName(s))) continue;
-      queries.push(s);
-      if (queries.length >= MAX_VARIANTS) break;
+    const res = await fetch(pageUrl, {
+      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT),
+      headers: { "User-Agent": IMAGE_UA, "Accept-Language": "fa,en;q=0.8" },
+    });
+    if (!res.ok || !res.body) return "";
+    // og:image در head است؛ فقط ۶۰K اول را بخوان (صفحه‌های چند مگابایتی را نگه ندار)
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of res.body) {
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total >= 60_000) break;
     }
-
-    let sources = [];
-    if (Array.isArray(parsed?.sources)) {
-      sources = [...new Set(parsed.sources.map((s) => String(s).trim().toLowerCase()).filter((s) => SOURCE_IDS.includes(s)))];
+    const html = Buffer.concat(chunks).toString("utf8");
+    for (const re of IMAGE_TAG_RES) {
+      const m = html.match(re);
+      if (!m || !m[1]) continue;
+      try {
+        return safeHttpUrl(new URL(m[1].trim(), pageUrl).href) || "";
+      } catch {
+        /* آدرس نسبیِ نامعتبر */
+      }
     }
-    if (!sources.length) sources = SOURCE_IDS;
-
-    return { queries, sources, model };
-  } catch (err) {
-    console.warn("جستجوی شغلی AI در دسترس نبود؛ جست‌وجوی عادی اجرا می‌شود →", String(err?.message ?? err).slice(0, 140));
-    return fallback;
+  } catch {
+    /* timeout یا خطای شبکه — بی‌صدا بدون تصویر */
   }
+  return "";
 }
 
-function titleKey(title) {
-  // نرمال‌سازی فارسی + حذف پسوندهای متغیر برای ادغام یک کالای واحد از منابع مختلف
-  const n = normalizeName(title)
-    .replace(/[()«»"',.،؛:!?]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  // هسته‌ی اول ۳۸ نویسه (گونه/رنگ/حجم متفاوت با همین هسته یکسان فرض نمی‌شوند؛
-  // ولی تیترهای تقریباً یکسانِ ترب و دیجی‌کالا ادغام می‌شوند)
-  return n.slice(0, 38).trim();
+/** نتیجه‌ی خام مدل → شکل خروجی priceSearch (قیمت عددی و تومانی). */
+function normalizeResult(item, index) {
+  if (!item || typeof item !== "object") return null;
+  // کلیدهای جدیدِ فشرده (p/t/u/s/i) + کلیدهای بلندِ قدیمی (سازگاری با هر فرمت مدل)
+  const title = String(item.t ?? item.title ?? item.name ?? "").trim().slice(0, 220);
+  if (!title) return null;
+
+  // قیمت: عدد خالص (Persian/Arabic digits و جداکننده هم می‌پذیرد) — همیشه تومان
+  const rawPrice = item.p ?? item.price ?? item.amount ?? item.price_toman ?? item.value ?? null;
+  let price = typeof rawPrice === "number" ? Math.round(rawPrice) : null;
+  if (price === null) {
+    const text = String(rawPrice ?? "").trim();
+    price = parseAmount(text);
+    // اگر مدل قیمت را با واحد ریال نوشته باشد («۹۱٬۰۰٬ ریال»)، به تومان تبدیل می‌شود
+    if (price === null && /(ریال|ريال|rial|irr)/i.test(text)) {
+      const cleaned = text.replace(/ریال|ريال|rial|irr/gi, "").replace(/[-–—]/g, "");
+      const v = parseAmount(cleaned);
+      if (v !== null) price = v / 10;
+    }
+  }
+  if (price === null || !Number.isFinite(price) || price <= 0) return null;
+  price = Math.round(price);
+
+  const url = safeHttpUrl(item.u ?? item.url ?? item.link ?? item.href ?? "") || "";
+  const source = String(item.s ?? item.source ?? item.site ?? item.store ?? "").trim().slice(0, 60) || "فروشگاه آنلاین";
+  const image = safeHttpUrl(item.i ?? item.image ?? item.img ?? item.photo ?? "") || "";
+
+  return {
+    title,
+    price,
+    price_label: formatAmount(price) + " تومان",
+    price_unit: "تومان",
+    url,
+    image,
+    source_id: slugSource(source),
+    source_label: source,
+    _order: index,
+  };
 }
 
 /**
- * جست‌وجوی قیمت شغل‌محور.
- * دور اول: عبارت اصلی کاربر در همه‌ی منابعِ پیشنهادی (موازی).
- * دور دوم (فقط منابع بی‌نتیجه): عبارت‌های جایگزین AI به‌ترتیب.
- * خروجی هم‌شکل priceSearch است تا فرانت بدون تغییر کار کند.
+ * جستجوی قیمت زنده — کاملاً با هوش مصنوعی.
+ * AI خودش در اینترنت می‌گردد، سایت‌ها را بر اساس شغل انتخاب می‌کند و
+ * چند نتیجه‌ی واقعی (عنوان/قیمت تومانی/لینک/سایت) برمی‌گرداند.
+ * @returns {Promise<{results:Array, query:string, job:string, sources:Array, errors:Array, queries:string[], smart:boolean, model:string|null}>}
  */
 export async function smartPriceSearch({ job = "", query = "" } = {}) {
   const raw = String(query ?? "").trim().slice(0, 180);
-  if (!raw) return { results: [], query: "", job: "", sources: [], errors: [], queries: [], smart: false };
+  if (!raw) return { results: [], query: "", job: "", sources: [], errors: [], queries: [], smart: false, model: null };
+  const jobText = String(job ?? "").trim().slice(0, 120);
 
-  const strategy = await buildSearchStrategy({ job, query: raw });
-  const queries = strategy.queries;
-  const sources = strategy.sources;
-  const smart = Boolean(strategy.model);
+  if (!aiConfigured()) {
+    const err = new Error("سرویس هوش مصنوعی در حال حاضر فعال نیست؛ برای جستجوی قیمت، کلید AI را در سرور تنظیم کنید.");
+    err.status = 503;
+    throw err;
+  }
 
-  const errors = [];
-  const perSource = new Map(sources.map((s) => [s, []]));
+  const cacheKey = `${raw.toLowerCase()}|${jobText.toLowerCase()}`;
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.data;
 
-  const runOne = async (source, q) => {
-    try {
-      const data = await priceSearch(q, "", source);
-      (data.errors ?? []).forEach((e) => errors.push(e));
-      return data.results ?? [];
-    } catch (err) {
-      errors.push(`${PRICE_SOURCES[source]?.label || source}: ${String(err?.message ?? err).slice(0, 120)}`);
-      return [];
-    }
+  const model = aiModel(); // مدلِ تنظیم‌شده در CHABOKAN_AI_MODEL
+  // پیام کاربر هم مینیمال است تا پری‌فیل کوتاه و سریع باشد
+  const userMessage = jobText ? `شغل: «${jobText}»\nکالا: «${raw}»` : `کالا: «${raw}»`;
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: userMessage },
+  ];
+  const callOpts = {
+    model,
+    // سقف توکن فقط «سقف» است و خروجی کوتاه را کند نمی‌کند؛ اما برای مدل‌هایی که
+    // در حین جستجوی وب reasoning می‌کنند، سقف کوچک باعث پاسخِ خالی (length)
+    // می‌شود — به‌همین‌دلیل ۳۰۰ نگه داشته می‌شود.
+    maxTokens: 3000,
+    temperature: 0.2,
+    timeoutMs: TIMEOUT_MS,
+    label: "جستجوی قیمت AI",
+    maxChars: 12000,
   };
 
-  // دور اول با عبارت اصلی (همان تجربه‌ی فعلی، ولی با ترتیب منابع پیشنهادی AI)
-  const firstRound = await Promise.all(sources.map((s) => runOne(s, queries[0])));
-  sources.forEach((s, i) => perSource.set(s, firstRound[i]));
-
-  // دور دوم فقط برای منابعی که هیچ نتیجه‌ای نداده‌اند و عبارت جایگزین هست
-  const hungry = sources.filter((s) => perSource.get(s).length === 0).slice(0, 4);
-  if (hungry.length && queries.length > 1) {
-    await Promise.all(
-      hungry.map(async (s) => {
-        for (const vq of queries.slice(1)) {
-          const found = await runOne(s, vq);
-          if (found.length) {
-            perSource.set(s, found);
-            break;
-          }
-        }
-      })
-    );
-  }
-
-  // ادغام + حذف تکرار بین منابع (ترب اغلب همان کالای دیجی‌کالا را برمی‌گرداند)
-  const seenByUrl = new Set();
-  const seenByTitle = new Set();
-  const merged = [];
-  for (const s of sources) {
-    for (const item of perSource.get(s)) {
-      if (item.url && seenByUrl.has(item.url)) continue;
-      const tk = titleKey(item.title);
-      // هسته‌ی تیتر بین منابع مختلفِ قیمت‌مشابه یک کالاست؛ ارزان‌ترین نگه داشته شود
-      if (seenByTitle.has(tk + s)) continue;
-      if (item.url) seenByUrl.add(item.url);
-      seenByTitle.add(tk + s);
-      merged.push(item);
+  // خطای درگاه AI (503/502/504) با همان پیام فارسی به کاربر می‌رسد
+  let reply;
+  let annotations = [];
+  try {
+    ({ reply, annotations } = await aiChatComplete(messages, { ...callOpts, webSearch: true }));
+  } catch (err) {
+    // اگر درگاه پلاگین جستجوی وب را نپذیرد (HTTP 400)، بدون پلاگین امتحان دوباره می‌شود
+    if (err?.status === 400) {
+      console.warn("جستجوی قیمت AI: پلاگین جستجوی اینترنت پذیرفته نشد؛ بدون آن تلاش دوباره می‌شود.");
+      ({ reply, annotations } = await aiChatComplete(messages, callOpts));
+    } else if (err?.finishReason === "length") {
+      // مدل سقف توکن را در reasoning/جستجو خرچ کرده و متن ننوشته؛ با سقف بزرگ‌تر یک‌بار دیگر
+      console.warn("جستجوی قیمت AI: پاسخ با سقف توکن پر شد (length)؛ با maxTokens=6000 تلاش دوباره می‌شود.");
+      ({ reply, annotations } = await aiChatComplete(messages, {
+        ...callOpts,
+        webSearch: true,
+        maxTokens: 6000,
+      }));
+    } else {
+      throw err;
     }
   }
-  // ادغام بین‌منبعیِ هسته‌ی یکسان (ارزان‌ترین بماند)
-  const cross = new Map();
-  for (const item of merged) {
-    const k = titleKey(item.title);
-    const old = cross.get(k);
-    if (!old || item.price < old.price) cross.set(k, item);
+
+  const parsed = extractJson(reply);
+  // فرمت جدید: {"r":[...]} — فرمت قدیمی: {"results":[...]} (هر دو پذیرفته می‌شود)
+  const rawItems = Array.isArray(parsed?.r) ? parsed.r : Array.isArray(parsed?.results) ? parsed.results : [];
+  if (!rawItems.length && parsed === null) {
+    const err = new Error("پاسخ هوش مصنوعی قابل‌خواندن نبود؛ دوباره تلاش کنید.");
+    err.status = 502;
+    err.retryable = true;
+    throw err;
   }
-  let results = [...cross.values()];
 
-  // مرتب‌سازی: ترتیب منابع AI، سپس ارزان‌ترین اول
-  const order = Object.fromEntries(sources.map((s, i) => [s, i]));
-  results.sort((a, b) => (order[a.source_id] ?? 9) - (order[b.source_id] ?? 9) || a.price - b.price);
-  results = results.slice(0, 14);
+  // نرمال‌سازی + حذف تکرار (بر اساس URL و بعداً عنوان+قیمت)
+  const seenUrl = new Set();
+  const seenTitle = new Set();
+  const results = [];
+  rawItems.forEach((item, index) => {
+    const r = normalizeResult(item, index);
+    if (!r) return;
+    if (r.url && seenUrl.has(r.url)) return;
+    const tk = `${r.title.toLowerCase()}|${r.price}`;
+    if (seenTitle.has(tk)) return;
+    if (r.url) seenUrl.add(r.url);
+    seenTitle.add(tk);
+    results.push(r);
+  });
 
-  const counts = sources.map((id) => ({
-    id,
-    label: PRICE_SOURCES[id].label,
-    count: results.filter((r) => r.source_id === id).length,
-  }));
+  // اگر مدل لینک نداده باشد، از لینک‌های واقعی‌ای که در نتایج جستجوی وب
+  // (annotations) استفاده کرده، نزدیک‌ترین عنوان را پیدا و تکمیل می‌کنیم
+  if (annotations.length) {
+    for (const r of results) {
+      if (r.url) continue;
+      const words = r.title.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+      const hit = words.length
+        ? annotations.find((a) => {
+            const t = (a.title || "").toLowerCase();
+            const u = (a.url || "").toLowerCase();
+            return words.some((w) => t.includes(w) || u.includes(w));
+          })
+        : null;
+      if (hit) r.url = hit.url;
+    }
+  }
 
-  return {
-    results,
+  // ارزان‌ترین اول
+  results.sort((a, b) => a.price - b.price || a._order - b._order);
+  const limited = results.slice(0, MAX_RESULTS).map(({ _order, ...r }) => r);
+
+  // نتایج بدون تصویر: og:image صفحه را موازی و با timeout کوتاه می‌گیریم
+  // (سقف IMAGE_FETCH_MAX نتیجه تا جستجو کند نشده، تصویر را طولانی نکند)
+  const needImage = limited.filter((r) => !r.image && r.url).slice(0, IMAGE_FETCH_MAX);
+  if (needImage.length) {
+    await Promise.all(needImage.map(async (r) => {
+      r.image = await fetchPageImage(r.url);
+    }));
+  }
+
+  // شمارش بر اساس سایت (برای نشان‌های منبع در فرانت)
+  const counts = new Map();
+  for (const r of limited) {
+    const prev = counts.get(r.source_label) || { id: r.source_id, label: r.source_label, count: 0 };
+    prev.count += 1;
+    counts.set(r.source_label, prev);
+  }
+
+  const data = {
+    results: limited,
     query: raw,
-    job: String(job ?? "").trim().slice(0, 120),
+    job: jobText,
     source: "",
-    sources: counts,
-    errors: [...new Set(errors)].slice(0, 8),
-    queries,
-    smart,
+    sources: [...counts.values()],
+    errors: limited.length === 0 ? ["هوش مصنوعی نتوانست قیمت واقعی پیدا کند."] : [],
+    queries: [raw],
+    smart: true,
+    model,
   };
+  if (limited.length) cacheSet(cacheKey, data);
+  return data;
 }
