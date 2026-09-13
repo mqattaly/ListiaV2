@@ -193,7 +193,8 @@ export async function aiChatComplete(messages, opts = {}) {
       if (/gpt-oss/i.test(model)) body.reasoning_effort = "low";
       // فعال‌سازی جستجوی اینترنت (مستندات درگاه سازگار با OpenAI / OpenRouter):
       // پلاگین «web» نتایج زنده‌ی وب را به مدل می‌دهد تا قیمت‌ها به‌روز باشند.
-      if (webSearch) body.plugins = [{ id: "web", max_results: 8 }];
+      // max_results مودبانه محدود است تا context و زمان پاسخ فربه نشود.
+      if (webSearch) body.plugins = [{ id: "web", max_results: 6 }];
       res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         signal: controller.signal,
